@@ -8,7 +8,7 @@ export default async function LocationsPage(): Promise<React.JSX.Element> {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Locations</h1>
+        <h1 className="font-heading text-2xl font-bold text-foreground">Locations</h1>
         <p className="text-sm text-muted-foreground">Where you coach.</p>
       </div>
 
@@ -27,7 +27,7 @@ export default async function LocationsPage(): Promise<React.JSX.Element> {
                 <MapPin className="size-5 stroke-[1.75]" />
               </div>
               <div className="flex flex-col">
-                <span className="text-base font-bold text-foreground">
+                <span className="font-heading text-base font-bold text-foreground">
                   {location.name}
                 </span>
                 {location.address && (

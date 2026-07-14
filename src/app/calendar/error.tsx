@@ -16,7 +16,7 @@ export default function Error({ error, reset }: ErrorPageProps): React.JSX.Eleme
 
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 rounded-3xl bg-card p-6 text-center">
-      <p className="text-lg font-bold text-foreground">Something went wrong</p>
+      <p className="font-heading text-lg font-bold text-foreground">Something went wrong</p>
       <p className="max-w-sm text-sm text-muted-foreground">
         We couldn&apos;t load the calendar. Try again, or come back in a moment.
       </p>

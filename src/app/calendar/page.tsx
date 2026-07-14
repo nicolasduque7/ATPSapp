@@ -66,7 +66,7 @@ export default async function CalendarPage(): Promise<React.JSX.Element> {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Calendar</h1>
+        <h1 className="font-heading text-2xl font-bold text-foreground">Calendar</h1>
         <p className="text-sm text-muted-foreground">
           Upcoming classes, grouped by day.
         </p>
@@ -98,7 +98,7 @@ export default async function CalendarPage(): Promise<React.JSX.Element> {
                       className="flex flex-col gap-2 rounded-2xl bg-muted px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold text-foreground">
+                        <span className="font-heading text-sm font-semibold text-foreground">
                           {formatTime(c.startTime)}–{formatTime(c.endTime)}
                         </span>
                         <span className="text-sm text-foreground">{student?.name}</span>

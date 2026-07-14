@@ -39,7 +39,7 @@ function StatCard({ label, value }: StatCardProps): React.JSX.Element {
   return (
     <div className="rounded-3xl bg-card p-6">
       <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-foreground">{value}</p>
+      <p className="mt-2 font-heading text-3xl font-bold text-foreground">{value}</p>
     </div>
   );
 }
@@ -59,7 +59,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Hello, {firstName}</h1>
+        <h1 className="font-heading text-2xl font-bold text-foreground">Hello, {firstName}</h1>
         <p className="text-sm text-muted-foreground">
           Here&apos;s what&apos;s on your schedule.
         </p>
@@ -75,7 +75,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
         <p className="text-sm text-primary-foreground/70">Next class</p>
         {nextClass ? (
           <div className="mt-2 flex flex-col gap-1">
-            <p className="text-2xl font-bold">
+            <p className="font-heading text-2xl font-bold">
               {formatDayLabel(nextClass.startTime)} · {formatTime(nextClass.startTime)}
             </p>
             <p className="text-sm text-primary-foreground/80">
@@ -109,7 +109,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
                   className="flex items-center justify-between gap-4 rounded-2xl bg-muted px-4 py-3"
                 >
                   <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-foreground">
+                    <span className="font-heading text-sm font-semibold text-foreground">
                       {student?.name}
                     </span>
                     <span className="text-xs text-muted-foreground">{location?.name}</span>
