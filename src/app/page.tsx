@@ -1,65 +1,128 @@
-import Image from "next/image";
+import {
+  getClassesForToday,
+  getLocationById,
+  getNextClass,
+  getStudentById,
+  getThisWeeksUpcomingClasses,
+  getWeeklyHoursCoached,
+  mockCoach,
+} from "@/lib/mock-data";
 
-export default function Home() {
+function formatTime(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatDayLabel(date: Date): string {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  if (date.toDateString() === now.toDateString()) return "Today";
+  if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+interface StatCardProps {
+  label: string;
+  value: string;
+}
+
+function StatCard({ label, value }: StatCardProps): React.JSX.Element {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="rounded-3xl bg-card p-6">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="mt-2 text-3xl font-bold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+export default async function HomePage(): Promise<React.JSX.Element> {
+  const [todayClasses, nextClass, weekUpcoming, weeklyHours] = await Promise.all([
+    getClassesForToday(),
+    getNextClass(),
+    getThisWeeksUpcomingClasses(),
+    getWeeklyHoursCoached(),
+  ]);
+
+  const completedToday = todayClasses.filter((c) => c.completed).length;
+  const remainingToday = todayClasses.filter((c) => !c.completed).length;
+  const firstName = mockCoach.name.split(" ")[0];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Hello, {firstName}</h1>
+        <p className="text-sm text-muted-foreground">
+          Here&apos;s what&apos;s on your schedule.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard label="Classes completed today" value={String(completedToday)} />
+        <StatCard label="Classes remaining today" value={String(remainingToday)} />
+        <StatCard label="Weekly hours coached" value={`${weeklyHours}h`} />
+      </div>
+
+      <div className="rounded-3xl bg-primary p-6 text-primary-foreground">
+        <p className="text-sm text-primary-foreground/70">Next class</p>
+        {nextClass ? (
+          <div className="mt-2 flex flex-col gap-1">
+            <p className="text-2xl font-bold">
+              {formatDayLabel(nextClass.startTime)} · {formatTime(nextClass.startTime)}
+            </p>
+            <p className="text-sm text-primary-foreground/80">
+              {getStudentById(nextClass.studentId)?.name} ·{" "}
+              {getLocationById(nextClass.locationId)?.name}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-2 text-lg font-semibold">
+            Nothing scheduled — enjoy the break.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        )}
+      </div>
+
+      <div className="rounded-3xl bg-card p-6">
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          This week&apos;s upcoming classes
+        </h2>
+        {weekUpcoming.length === 0 ? (
+          <p className="mt-4 text-sm text-muted-foreground">
+            No upcoming classes this week.
+          </p>
+        ) : (
+          <ul className="mt-4 flex flex-col gap-3">
+            {weekUpcoming.map((c) => {
+              const student = getStudentById(c.studentId);
+              const location = getLocationById(c.locationId);
+              return (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between gap-4 rounded-2xl bg-muted px-4 py-3"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-foreground">
+                      {student?.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{location?.name}</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {formatDayLabel(c.startTime)} · {formatTime(c.startTime)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

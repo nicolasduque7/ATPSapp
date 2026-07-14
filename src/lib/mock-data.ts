@@ -166,6 +166,25 @@ export async function getUpcomingClasses(days = 7): Promise<ClassInstance[]> {
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
 
+export async function getNextClass(): Promise<ClassInstance | undefined> {
+  await delay(200)
+  const now = new Date()
+  return mockClasses
+    .filter((c) => c.startTime > now)
+    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())[0]
+}
+
+export async function getThisWeeksUpcomingClasses(): Promise<ClassInstance[]> {
+  await delay(200)
+  const now = new Date()
+  const dayOfWeek = now.getDay()
+  const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek)
+  const endOfWeek = new Date(startOfWeek.getTime() + 7 * 24 * 60 * 60_000)
+  return mockClasses
+    .filter((c) => c.startTime > now && c.startTime < endOfWeek)
+    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+}
+
 export async function getWeeklyHoursCoached(): Promise<number> {
   await delay(200)
   const now = new Date()
