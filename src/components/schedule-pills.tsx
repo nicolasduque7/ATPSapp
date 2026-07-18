@@ -45,7 +45,7 @@ export function SchedulePills({ classes }: SchedulePillsProps) {
   const completedCount = sorted.filter((c) => now >= c.endTime).length
 
   return (
-    <div className="rounded-3xl bg-card p-6">
+    <div className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-300 motion-reduce:animate-none rounded-3xl bg-card p-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-baseline gap-2">
           <h2 className="font-heading text-lg font-bold text-foreground">Schedule</h2>
@@ -58,7 +58,7 @@ export function SchedulePills({ classes }: SchedulePillsProps) {
         <Link
           href="/calendar"
           aria-label="View calendar"
-          className="text-muted-foreground transition-colors hover:text-foreground"
+          className="rounded-full text-muted-foreground outline-none transition-colors duration-200 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
         >
           <ChevronRight className="size-5" />
         </Link>
@@ -77,24 +77,25 @@ export function SchedulePills({ classes }: SchedulePillsProps) {
             className="overflow-x-auto"
           >
             <div className="flex items-center gap-4">
-              {sorted.map((c) => {
+              {sorted.map((c, index) => {
                 const completed = now >= c.endTime
                 const student = getStudentById(c.studentId)
                 return (
                   <div
                     key={c.id}
                     title={student?.name}
-                    className="flex min-w-14 flex-1 flex-col items-center gap-2"
+                    style={{ "--tw-animation-delay": `${index * 40}ms` } as React.CSSProperties}
+                    className="flex min-w-14 flex-1 animate-in fade-in fill-mode-both flex-col items-center gap-2 duration-300 motion-reduce:animate-none"
                   >
                     <span
                       className={cn(
-                        "h-1.5 w-full rounded-full transition-colors duration-500",
+                        "h-1.5 w-full rounded-full transition-colors duration-300 motion-reduce:transition-none",
                         completed ? "bg-primary" : "bg-muted"
                       )}
                     />
                     <span
                       className={cn(
-                        "text-xs transition-colors duration-500",
+                        "text-xs transition-colors duration-300 motion-reduce:transition-none",
                         completed ? "font-semibold text-foreground" : "text-muted-foreground"
                       )}
                     >

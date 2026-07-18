@@ -57,7 +57,7 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
   }, [visibleData])
 
   return (
-    <div className="rounded-3xl bg-card p-6">
+    <div className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-300 motion-reduce:animate-none rounded-3xl bg-card p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-heading text-lg font-bold text-foreground">Classes Timeline</h2>
         <span className="text-sm text-muted-foreground">{rangeLabel}</span>
@@ -89,7 +89,13 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
               />
             }
           />
-          <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={28}>
+          <Bar
+            dataKey="count"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={28}
+            animationDuration={300}
+            animationEasing="ease-out"
+          >
             {visibleData.map((d) => (
               <Cell
                 key={d.dayOffset}

@@ -39,6 +39,12 @@ Pages: Home (dashboard), Calendar, Locations, Students.
   motion, micro-interactions, UX best-practices, accessibility, and component
   patterns. It must NEVER override our locked palette, fonts, spacing, or the
   dark-mode requirement. On any conflict, the `design-system` skill wins.
+- The `dataviz` skill (installed at `.claude/skills/dataviz/`) is ADVISORY ONLY
+  for any chart, graph, stat tile, or sparkline — use it for chart form
+  selection, mark specs, and interaction rules. It must NEVER override our
+  locked palette, fonts, spacing, or the dark-mode requirement. Charts use
+  `design-system`'s sage primary and existing muted/border tokens, not the
+  skill's placeholder palette. On any conflict, the `design-system` skill wins.
 
 ## Guardrails (never do)
 - Never commit secrets or `.env` files.

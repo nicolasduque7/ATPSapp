@@ -1,3 +1,5 @@
+import { CountUpNumber } from "@/components/count-up-number"
+
 interface CircularProgressProps {
   value: number
   total: number
@@ -44,7 +46,7 @@ export function CircularProgress({
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          className="stroke-primary transition-[stroke-dashoffset] duration-500 ease-out"
+          className="stroke-primary transition-[stroke-dashoffset] duration-300 ease-out motion-reduce:transition-none"
         />
       </g>
     </svg>
@@ -77,7 +79,7 @@ export function ClassesRingStat({
             className="font-heading font-bold text-foreground leading-none"
             style={{ fontSize: numberFontSize }}
           >
-            {completed}
+            <CountUpNumber value={completed} />
           </p>
           <p
             className="text-muted-foreground leading-tight"
@@ -91,7 +93,7 @@ export function ClassesRingStat({
             className="font-heading font-bold text-foreground leading-none"
             style={{ fontSize: numberFontSize }}
           >
-            {remaining}
+            <CountUpNumber value={remaining} />
           </p>
           <p
             className="text-muted-foreground leading-tight"

@@ -1,0 +1,201 @@
+/* Thin, minimal overrides for react-big-calendar's default stylesheet —
+   swaps its blue theme + heavy borders for CourtSide's design tokens.
+   Scoped under .courtside-calendar so nothing leaks outside the calendar. */
+
+.courtside-calendar .rbc-calendar {
+  font-size: 0.8125rem;
+}
+
+/* Grid structure: hairline borders in the app's border token, no heavy lines */
+.courtside-calendar .rbc-month-view,
+.courtside-calendar .rbc-time-view {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.courtside-calendar .rbc-month-row + .rbc-month-row,
+.courtside-calendar .rbc-day-bg + .rbc-day-bg,
+.courtside-calendar .rbc-header + .rbc-header,
+.courtside-calendar .rbc-header,
+.courtside-calendar .rbc-time-header.rbc-overflowing,
+.courtside-calendar .rbc-time-header > .rbc-row:first-child,
+.courtside-calendar .rbc-time-header-content,
+.courtside-calendar .rbc-time-content,
+.courtside-calendar .rbc-time-content > * + * > *,
+.courtside-calendar .rbc-timeslot-group,
+.courtside-calendar .rbc-day-slot .rbc-time-slot {
+  border-color: var(--border);
+}
+
+.courtside-calendar .rbc-time-content {
+  border-top-width: 1px;
+}
+
+/* Headers: quiet caption style instead of bold black */
+.courtside-calendar .rbc-header {
+  padding: 0.5rem 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.courtside-calendar .rbc-label {
+  padding: 0 0.5rem;
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+}
+
+/* Off-range (prev/next month) days */
+.courtside-calendar .rbc-off-range {
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+
+.courtside-calendar .rbc-off-range-bg {
+  background: color-mix(in oklch, var(--muted-foreground) 6%, transparent);
+}
+
+/* Today: a gentle highlight, not a hard fill */
+.courtside-calendar .rbc-today {
+  background-color: color-mix(in oklch, var(--primary) 8%, transparent);
+}
+
+.courtside-calendar .rbc-current-time-indicator {
+  height: 2px;
+  background-color: var(--primary);
+}
+
+/* Date numbers double as drill-down links; give them a real hover/focus state */
+.courtside-calendar .rbc-button-link {
+  transition: color 200ms ease;
+}
+
+.courtside-calendar .rbc-button-link:hover {
+  color: var(--foreground);
+}
+
+.courtside-calendar .rbc-date-cell.rbc-now .rbc-button-link {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* Events: light sage tile with a thin accent, not a solid blue block.
+   Clickable (opens the edit dialog), so it gets a real hover + focus state. */
+.courtside-calendar .rbc-event {
+  background-color: color-mix(in oklch, var(--primary) 14%, transparent);
+  border: none;
+  border-left: 3px solid var(--primary);
+  border-radius: 0.5rem;
+  padding: 0;
+  box-shadow: none;
+  transition: background-color 200ms ease;
+}
+
+.courtside-calendar .rbc-event:hover {
+  background-color: color-mix(in oklch, var(--primary) 20%, transparent);
+}
+
+.courtside-calendar .rbc-event.rbc-selected {
+  background-color: color-mix(in oklch, var(--primary) 22%, transparent);
+}
+
+.courtside-calendar .rbc-event:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.courtside-calendar .rbc-day-slot .rbc-event,
+.courtside-calendar .rbc-day-slot .rbc-background-event {
+  border: none;
+  border-left: 3px solid var(--primary);
+}
+
+.courtside-calendar .rbc-event-label {
+  display: none;
+}
+
+/* "+N more" popover trigger and the popover itself */
+.courtside-calendar .rbc-show-more {
+  background-color: transparent;
+  color: var(--muted-foreground);
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+
+.courtside-calendar .rbc-show-more:hover,
+.courtside-calendar .rbc-show-more:focus {
+  color: var(--foreground);
+}
+
+.courtside-calendar .rbc-overlay {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 0.75rem;
+}
+
+.courtside-calendar .rbc-overlay-header {
+  border-bottom: 1px solid var(--border);
+  margin: -0.75rem -0.75rem 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--muted-foreground);
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.courtside-calendar .rbc-selected-cell {
+  background-color: color-mix(in oklch, var(--primary) 10%, transparent);
+}
+
+.courtside-calendar .rbc-slot-selection {
+  background-color: color-mix(in oklch, var(--primary) 30%, transparent);
+  color: var(--primary-foreground);
+}
+
+/* Narrow screens: multi-column views can't shrink far and stay legible.
+   Scroll the grid horizontally instead of squeezing it — the toolbar (view
+   switcher, nav) stays outside this and never scrolls away. Day already has
+   just one column and fits without this. */
+@media (max-width: 900px) {
+  .courtside-calendar[data-calendar-view="month"] .rbc-month-view {
+    overflow-x: auto;
+  }
+
+  .courtside-calendar[data-calendar-view="month"] .rbc-month-header,
+  .courtside-calendar[data-calendar-view="month"] .rbc-month-row {
+    min-width: 720px;
+  }
+
+  .courtside-calendar[data-calendar-view="week"] .rbc-time-view,
+  .courtside-calendar[data-calendar-view="three-day"] .rbc-time-view {
+    overflow-x: auto;
+  }
+
+  .courtside-calendar[data-calendar-view="week"] .rbc-time-header,
+  .courtside-calendar[data-calendar-view="week"] .rbc-time-content {
+    min-width: 720px;
+  }
+
+  .courtside-calendar[data-calendar-view="three-day"] .rbc-time-header,
+  .courtside-calendar[data-calendar-view="three-day"] .rbc-time-content {
+    min-width: 480px;
+  }
+
+  .courtside-calendar[data-calendar-view="week"] .rbc-time-gutter,
+  .courtside-calendar[data-calendar-view="month"] .rbc-time-gutter,
+  .courtside-calendar[data-calendar-view="three-day"] .rbc-time-gutter {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: var(--card);
+  }
+
+  .courtside-calendar[data-calendar-view="week"] .rbc-time-header-gutter,
+  .courtside-calendar[data-calendar-view="three-day"] .rbc-time-header-gutter {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background-color: var(--card);
+  }
+}

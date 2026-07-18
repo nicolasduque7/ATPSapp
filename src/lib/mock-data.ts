@@ -1,4 +1,4 @@
-export type StudentLevel = "Beginner" | "Intermediate" | "Advanced"
+export type StudentLevel = "1ra" | "2da" | "3ra" | "4ta" | "5ta" | "6ta"
 
 export interface Coach {
   id: string
@@ -51,14 +51,14 @@ export const mockLocations: Location[] = [
 ]
 
 export const mockStudents: Student[] = [
-  { id: "stu-1", name: "Ana Reyes", nickname: "Ani", level: "Intermediate", age: 14, gender: "Female", racketType: "Wilson Clash 100" },
-  { id: "stu-2", name: "Leo Martins", nickname: "Leo", level: "Beginner", age: 9, gender: "Male", racketType: "Babolat Pure Drive Jr" },
-  { id: "stu-3", name: "Priya Nair", level: "Advanced", age: 17, gender: "Female", racketType: "Head Speed Pro" },
-  { id: "stu-4", name: "Marcus Chen", nickname: "Marc", level: "Intermediate", age: 22, gender: "Male", racketType: "Yonex Ezone 98" },
-  { id: "stu-5", name: "Sofia Petrov", level: "Beginner", age: 11, gender: "Female", racketType: "Wilson Roland Garros" },
-  { id: "stu-6", name: "Diego Alvarez", nickname: "Dee", level: "Advanced", age: 19, gender: "Male", racketType: "Babolat Pure Aero" },
-  { id: "stu-7", name: "Grace Kim", level: "Intermediate", age: 15, gender: "Female", racketType: "Head Radical" },
-  { id: "stu-8", name: "Owen Fischer", nickname: "Ozzy", level: "Beginner", age: 13, gender: "Male", racketType: "Wilson Ultra 100" },
+  { id: "stu-1", name: "Ana Reyes", nickname: "Ani", level: "4ta", age: 14, gender: "Female", racketType: "Wilson Clash 100" },
+  { id: "stu-2", name: "Leo Martins", nickname: "Leo", level: "6ta", age: 9, gender: "Male", racketType: "Babolat Pure Drive Jr" },
+  { id: "stu-3", name: "Priya Nair", level: "1ra", age: 17, gender: "Female", racketType: "Head Speed Pro" },
+  { id: "stu-4", name: "Marcus Chen", nickname: "Marc", level: "4ta", age: 22, gender: "Male", racketType: "Yonex Ezone 98" },
+  { id: "stu-5", name: "Sofia Petrov", level: "6ta", age: 11, gender: "Female", racketType: "Wilson Roland Garros" },
+  { id: "stu-6", name: "Diego Alvarez", nickname: "Dee", level: "1ra", age: 19, gender: "Male", racketType: "Babolat Pure Aero" },
+  { id: "stu-7", name: "Grace Kim", level: "4ta", age: 15, gender: "Female", racketType: "Head Radical" },
+  { id: "stu-8", name: "Owen Fischer", nickname: "Ozzy", level: "6ta", age: 13, gender: "Male", racketType: "Wilson Ultra 100" },
 ]
 
 function atTime(base: Date, hour: number, minute: number, dayOffset = 0): Date {
@@ -188,6 +188,11 @@ export async function getClassesForToday(): Promise<ClassInstance[]> {
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
 
+export async function getAllClasses(): Promise<ClassInstance[]> {
+  await delay(200)
+  return [...mockClasses].sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+}
+
 export async function getUpcomingClasses(days = 7): Promise<ClassInstance[]> {
   await delay(200)
   const now = new Date()
@@ -265,6 +270,31 @@ export async function getBusiestDayThisWeek(): Promise<string | undefined> {
     0
   )
   return counts[busiestIndex] > 0 ? WEEKDAY_ABBREVIATIONS[busiestIndex] : undefined
+}
+
+const STUDENT_LEVELS: StudentLevel[] = ["1ra", "2da", "3ra", "4ta", "5ta", "6ta"]
+
+export interface LevelClassCount {
+  level: StudentLevel
+  count: number
+}
+
+export function getClassCountsByLevel(classes: ClassInstance[]): LevelClassCount[] {
+  const counts: Record<StudentLevel, number> = {
+    "1ra": 0,
+    "2da": 0,
+    "3ra": 0,
+    "4ta": 0,
+    "5ta": 0,
+    "6ta": 0,
+  }
+
+  for (const c of classes) {
+    const student = getStudentById(c.studentId)
+    if (student) counts[student.level] += 1
+  }
+
+  return STUDENT_LEVELS.map((level) => ({ level, count: counts[level] }))
 }
 
 export interface DailyClassCount {

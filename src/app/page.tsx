@@ -2,6 +2,7 @@ import { ArrowRight } from "lucide-react";
 
 import {
   getBusiestDayThisWeek,
+  getClassCountsByLevel,
   getClassesCoachedThisWeek,
   getClassesForToday,
   getDailyClassCounts,
@@ -17,23 +18,15 @@ import { Button } from "@/components/ui/button";
 import { ClassesRingStat } from "@/components/circular-progress";
 import { SchedulePills } from "@/components/schedule-pills";
 import { ClassesTimelineChart } from "@/components/classes-timeline-chart";
+import { TodayLevelsChart } from "@/components/today-levels-chart";
+import { NextClassCountdown } from "@/components/next-class-countdown";
+import { CountUpNumber } from "@/components/count-up-number";
 
 function formatTime(date: Date): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
-}
-
-function formatCountdown(startTime: Date): string {
-  const totalMinutes = Math.max(
-    0,
-    Math.round((startTime.getTime() - Date.now()) / 60_000)
-  );
-  if (totalMinutes < 60) return `${totalMinutes}m`;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
 
 function formatDurationHours(durationMinutes: number): string {
@@ -76,6 +69,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
 
   const completedToday = todayClasses.filter((c) => c.completed).length;
   const remainingToday = todayClasses.filter((c) => !c.completed).length;
+  const levelCountsToday = getClassCountsByLevel(todayClasses);
   const firstName = mockCoach.name.split(" ")[0];
 
   return (
@@ -87,7 +81,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
         </p>
       </div>
 
-      <div className="relative rounded-3xl bg-primary p-6 text-primary-foreground">
+      <div className="relative animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 motion-reduce:animate-none rounded-3xl bg-primary p-6 text-primary-foreground">
         <p className="text-sm text-primary-foreground/70">Next class</p>
         {nextClass ? (
           (() => {
@@ -96,7 +90,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
             return (
               <>
                 <span className="absolute top-6 right-6 inline-flex items-center rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-medium text-primary-foreground">
-                  in {formatCountdown(nextClass.startTime)}
+                  <NextClassCountdown startTime={nextClass.startTime} />
                 </span>
 
                 <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 pr-24">
@@ -152,42 +146,57 @@ export default async function HomePage(): Promise<React.JSX.Element> {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-3xl bg-card p-6 sm:col-span-2">
-          <p className="text-sm text-muted-foreground">Today</p>
-          <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:divide-x sm:divide-border">
-            <div className="flex flex-col gap-3 sm:pr-6">
-              <p className="text-sm text-muted-foreground">Classes</p>
-              <ClassesRingStat completed={completedToday} remaining={remainingToday} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:col-span-2">
+          <div className="flex animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-75 motion-reduce:animate-none flex-col rounded-3xl bg-card p-5">
+            <p className="font-heading text-base font-bold text-foreground">Today&apos;s classes</p>
+            <div className="mt-2 flex flex-1 flex-col justify-center">
+              <ClassesRingStat
+                completed={completedToday}
+                remaining={remainingToday}
+                size={56}
+                strokeWidth={6}
+              />
             </div>
+          </div>
 
-            <div className="flex flex-col justify-center sm:pl-6">
-              <div className="flex flex-row items-baseline gap-2 sm:flex-col sm:items-start sm:gap-1">
-                <p className="font-heading text-3xl font-bold text-foreground">{hoursToday}h</p>
-                <p className="text-xs text-muted-foreground">Hours coached today</p>
-              </div>
+          <div className="flex animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-150 motion-reduce:animate-none flex-col rounded-3xl bg-card p-5">
+            <p className="font-heading text-base font-bold text-foreground">
+              Today student&apos;s levels
+            </p>
+            <div className="mt-2 flex flex-1 flex-col justify-center">
+              <TodayLevelsChart data={levelCountsToday} />
+            </div>
+          </div>
+
+          <div className="flex animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-200 motion-reduce:animate-none flex-col rounded-3xl bg-card p-5">
+            <p className="font-heading text-base font-bold text-foreground">hrs</p>
+            <div className="mt-2 flex flex-1 flex-col justify-center">
+              <p className="font-heading text-3xl font-bold text-foreground">
+                <CountUpNumber value={hoursToday} decimals={1} suffix="h" />
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Hours coached today</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-3xl bg-card p-6">
-          <p className="text-sm text-muted-foreground">Weekly</p>
-          <p className="mt-4 text-sm text-muted-foreground">This Week</p>
-          <div className="mt-3 flex flex-col gap-4">
+        <div className="flex animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-300 motion-reduce:animate-none flex-col rounded-3xl bg-card p-5">
+          <p className="font-heading text-base font-bold text-foreground">Weekly</p>
+          <div className="mt-2 flex flex-1 flex-col justify-center gap-2">
             <div>
-              <p className="font-heading text-3xl font-bold text-foreground">
-                {classesThisWeek}
+              <p className="font-heading text-2xl font-bold text-foreground">
+                <CountUpNumber value={classesThisWeek} />
               </p>
               <p className="mt-1 text-xs text-muted-foreground">Classes coached</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="font-heading text-2xl font-bold text-foreground">
-                  {studentsThisWeek}
+                <p className="font-heading text-lg font-bold text-foreground">
+                  <CountUpNumber value={studentsThisWeek} />
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">Students coached</p>
               </div>
               <div>
-                <p className="font-heading text-2xl font-bold text-foreground">
+                <p className="font-heading text-lg font-bold text-foreground">
                   {busiestDay ?? "—"}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">Busiest day</p>

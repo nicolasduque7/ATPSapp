@@ -5,10 +5,7 @@ export default function Loading(): React.JSX.Element {
         <div className="h-7 w-32 animate-pulse rounded-full bg-card motion-reduce:animate-none" />
         <div className="h-4 w-56 animate-pulse rounded-full bg-card motion-reduce:animate-none" />
       </div>
-      <div className="h-11 animate-pulse rounded-3xl bg-card motion-reduce:animate-none" />
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="h-36 animate-pulse rounded-3xl bg-card motion-reduce:animate-none" />
-      ))}
+      <div className="h-[1150px] animate-pulse rounded-3xl bg-card motion-reduce:animate-none" />
     </div>
   );
 }
