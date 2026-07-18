@@ -42,3 +42,6 @@ next-env.d.ts
 
 # screenshots (disposable, user-owned)
 .screenshots/
+
+# playwright MCP debug output
+.playwright-mcp/
