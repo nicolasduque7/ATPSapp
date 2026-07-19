@@ -43,6 +43,8 @@
   --color-positive-bg: var(--positive-bg);
   --color-negative: var(--negative);
   --color-negative-bg: var(--negative-bg);
+  --color-tag-plum: var(--tag-plum);
+  --color-tag-sky: var(--tag-sky);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -75,6 +77,8 @@
   --positive-bg: #e4efe4;
   --negative: #b04a47;
   --negative-bg: #f3dedd;
+  --tag-plum: #6b5a9e;
+  --tag-sky: #3f7a94;
   --chart-1: #758a7c;
   --chart-2: #4f7a52;
   --chart-3: #908f8b;
@@ -114,6 +118,8 @@
   --positive-bg: #24352a;
   --negative: #e2918e;
   --negative-bg: #3a2320;
+  --tag-plum: #b7a4e8;
+  --tag-sky: #7ec2dc;
   --chart-1: #758a7c;
   --chart-2: #8fcb93;
   --chart-3: #9c9b96;

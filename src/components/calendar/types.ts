@@ -1,4 +1,4 @@
-import type { StudentLevel } from "@/lib/mock-data"
+import type { ClassType, StudentLevel } from "@/lib/mock-data"
 
 export type CalendarViewKey = "month" | "week" | "three-day" | "day"
 
@@ -14,5 +14,6 @@ export interface CalendarClassEvent {
     locationId: string
     locationName: string
     durationMinutes: number
+    type: ClassType
   }
 }

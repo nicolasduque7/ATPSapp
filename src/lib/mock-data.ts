@@ -1,5 +1,7 @@
 export type StudentLevel = "1ra" | "2da" | "3ra" | "4ta" | "5ta" | "6ta"
 
+export type ClassType = "Private" | "Group" | "Match"
+
 export interface Coach {
   id: string
   name: string
@@ -26,6 +28,7 @@ export interface ClassInstance {
   id: string
   studentId: string
   locationId: string
+  type: ClassType
   startTime: Date
   endTime: Date
   durationMinutes: number
@@ -75,7 +78,10 @@ interface Seed {
   durationMinutes: number
   studentIndex: number
   locationIndex: number
+  type?: ClassType
 }
+
+const CLASS_TYPES: ClassType[] = ["Private", "Group", "Match"]
 
 // Deterministically fills in classes for timeline days beyond the hand-authored
 // seeds below (dayOffset -14..-1 and 10..14), so the Classes Timeline chart has
@@ -96,6 +102,7 @@ function buildFillerSeeds(dayOffsets: number[]): Seed[] {
         durationMinutes: durations[cursor % durations.length],
         studentIndex: cursor % mockStudents.length,
         locationIndex: cursor % mockLocations.length,
+        type: CLASS_TYPES[cursor % CLASS_TYPES.length],
       })
       cursor++
     }
@@ -111,25 +118,25 @@ function buildMockClasses(): ClassInstance[] {
 
   const seeds: Seed[] = [
     // earlier today (completed, since they're in the morning)
-    { dayOffset: 0, hour: 8, minute: 0, durationMinutes: 60, studentIndex: 0, locationIndex: 0 },
-    { dayOffset: 0, hour: 9, minute: 30, durationMinutes: 45, studentIndex: 1, locationIndex: 1 },
+    { dayOffset: 0, hour: 8, minute: 0, durationMinutes: 60, studentIndex: 0, locationIndex: 0, type: "Private" },
+    { dayOffset: 0, hour: 9, minute: 30, durationMinutes: 45, studentIndex: 1, locationIndex: 1, type: "Group" },
     // later today
-    { dayOffset: 0, hour: 16, minute: 0, durationMinutes: 60, studentIndex: 2, locationIndex: 2 },
-    { dayOffset: 0, hour: 18, minute: 0, durationMinutes: 60, studentIndex: 3, locationIndex: 0 },
+    { dayOffset: 0, hour: 16, minute: 0, durationMinutes: 60, studentIndex: 2, locationIndex: 2, type: "Private" },
+    { dayOffset: 0, hour: 18, minute: 0, durationMinutes: 60, studentIndex: 3, locationIndex: 0, type: "Match" },
     // this week
-    { dayOffset: 1, hour: 9, minute: 0, durationMinutes: 60, studentIndex: 4, locationIndex: 1 },
-    { dayOffset: 1, hour: 17, minute: 0, durationMinutes: 45, studentIndex: 5, locationIndex: 3 },
-    { dayOffset: 2, hour: 10, minute: 0, durationMinutes: 60, studentIndex: 6, locationIndex: 2 },
-    { dayOffset: 2, hour: 16, minute: 30, durationMinutes: 60, studentIndex: 7, locationIndex: 0 },
-    { dayOffset: 3, hour: 8, minute: 30, durationMinutes: 60, studentIndex: 0, locationIndex: 1 },
-    { dayOffset: 3, hour: 18, minute: 0, durationMinutes: 45, studentIndex: 1, locationIndex: 3 },
-    { dayOffset: 4, hour: 15, minute: 0, durationMinutes: 60, studentIndex: 2, locationIndex: 0 },
-    { dayOffset: 4, hour: 17, minute: 30, durationMinutes: 60, studentIndex: 3, locationIndex: 2 },
-    { dayOffset: 5, hour: 9, minute: 0, durationMinutes: 60, studentIndex: 4, locationIndex: 1 },
-    { dayOffset: 6, hour: 11, minute: 0, durationMinutes: 60, studentIndex: 5, locationIndex: 3 },
+    { dayOffset: 1, hour: 9, minute: 0, durationMinutes: 60, studentIndex: 4, locationIndex: 1, type: "Private" },
+    { dayOffset: 1, hour: 17, minute: 0, durationMinutes: 45, studentIndex: 5, locationIndex: 3, type: "Group" },
+    { dayOffset: 2, hour: 10, minute: 0, durationMinutes: 60, studentIndex: 6, locationIndex: 2, type: "Private" },
+    { dayOffset: 2, hour: 16, minute: 30, durationMinutes: 60, studentIndex: 7, locationIndex: 0, type: "Private" },
+    { dayOffset: 3, hour: 8, minute: 30, durationMinutes: 60, studentIndex: 0, locationIndex: 1, type: "Match" },
+    { dayOffset: 3, hour: 18, minute: 0, durationMinutes: 45, studentIndex: 1, locationIndex: 3, type: "Private" },
+    { dayOffset: 4, hour: 15, minute: 0, durationMinutes: 60, studentIndex: 2, locationIndex: 0, type: "Group" },
+    { dayOffset: 4, hour: 17, minute: 30, durationMinutes: 60, studentIndex: 3, locationIndex: 2, type: "Private" },
+    { dayOffset: 5, hour: 9, minute: 0, durationMinutes: 60, studentIndex: 4, locationIndex: 1, type: "Private" },
+    { dayOffset: 6, hour: 11, minute: 0, durationMinutes: 60, studentIndex: 5, locationIndex: 3, type: "Match" },
     // next week
-    { dayOffset: 8, hour: 16, minute: 0, durationMinutes: 60, studentIndex: 6, locationIndex: 0 },
-    { dayOffset: 9, hour: 9, minute: 30, durationMinutes: 45, studentIndex: 7, locationIndex: 2 },
+    { dayOffset: 8, hour: 16, minute: 0, durationMinutes: 60, studentIndex: 6, locationIndex: 0, type: "Private" },
+    { dayOffset: 9, hour: 9, minute: 30, durationMinutes: 45, studentIndex: 7, locationIndex: 2, type: "Group" },
     // filler so the Classes Timeline chart has data across its full ±14 day range
     // (day 7 was never hand-authored above, so it's included here too)
     ...buildFillerSeeds([
@@ -144,6 +151,7 @@ function buildMockClasses(): ClassInstance[] {
       id: `class-${index + 1}`,
       studentId: students[seed.studentIndex].id,
       locationId: locations[seed.locationIndex].id,
+      type: seed.type ?? "Private",
       startTime,
       endTime,
       durationMinutes: seed.durationMinutes,

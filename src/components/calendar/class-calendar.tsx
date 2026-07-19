@@ -64,6 +64,11 @@ export function ClassCalendar({ events: initialEvents, students, locations }: Cl
     setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
   }
 
+  function handleDelete(eventId: string) {
+    setEvents((prev) => prev.filter((e) => e.id !== eventId))
+    setSelectedEvent(null)
+  }
+
   return (
     <div
       className="courtside-calendar h-[1150px] rounded-3xl bg-card p-4 sm:p-6"
@@ -96,6 +101,7 @@ export function ClassCalendar({ events: initialEvents, students, locations }: Cl
           if (!open) setSelectedEvent(null)
         }}
         onSave={handleSave}
+        onDelete={handleDelete}
       />
     </div>
   )

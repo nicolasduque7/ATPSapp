@@ -33,6 +33,7 @@ export default async function CalendarPage(): Promise<React.JSX.Element> {
           locationId: location.id,
           locationName: location.name,
           durationMinutes: c.durationMinutes,
+          type: c.type,
         },
       },
     ];
