@@ -8,10 +8,15 @@ export interface Coach {
   email: string
 }
 
+export type CourtSurface = "Hard" | "Clay" | "Both"
+
 export interface Location {
   id: string
   name: string
   address?: string
+  surface: CourtSurface
+  hardCourts: number
+  clayCourts: number
 }
 
 export interface Student {
@@ -47,10 +52,10 @@ export const mockCoach: Coach = {
 }
 
 export const mockLocations: Location[] = [
-  { id: "loc-1", name: "Riverside Courts", address: "100 Riverside Dr" },
-  { id: "loc-2", name: "Westside Park", address: "220 Westside Ave" },
-  { id: "loc-3", name: "Oakwood Tennis Club", address: "44 Oakwood Ln" },
-  { id: "loc-4", name: "Downtown Rec Center", address: "12 Main St" },
+  { id: "loc-1", name: "Riverside Courts", address: "100 Riverside Dr", surface: "Both", hardCourts: 3, clayCourts: 2 },
+  { id: "loc-2", name: "Westside Park", address: "220 Westside Ave", surface: "Hard", hardCourts: 4, clayCourts: 0 },
+  { id: "loc-3", name: "Oakwood Tennis Club", address: "44 Oakwood Ln", surface: "Clay", hardCourts: 0, clayCourts: 5 },
+  { id: "loc-4", name: "Downtown Rec Center", address: "12 Main St", surface: "Hard", hardCourts: 2, clayCourts: 0 },
 ]
 
 export const mockStudents: Student[] = [
