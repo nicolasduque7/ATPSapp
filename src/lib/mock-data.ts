@@ -2,6 +2,10 @@ export type StudentLevel = "1ra" | "2da" | "3ra" | "4ta" | "5ta" | "6ta"
 
 export type ClassType = "Private" | "Group" | "Match"
 
+export type Gender = "Female" | "Male"
+
+export type Hand = "Right" | "Left"
+
 export interface Coach {
   id: string
   name: string
@@ -25,8 +29,11 @@ export interface Student {
   nickname?: string
   level: StudentLevel
   age: number
-  gender: string
+  gender: Gender
+  hand: Hand
   racketType?: string
+  since: Date
+  coachingNote?: string
 }
 
 export interface ClassInstance {
@@ -59,14 +66,14 @@ export const mockLocations: Location[] = [
 ]
 
 export const mockStudents: Student[] = [
-  { id: "stu-1", name: "Ana Reyes", nickname: "Ani", level: "4ta", age: 14, gender: "Female", racketType: "Wilson Clash 100" },
-  { id: "stu-2", name: "Leo Martins", nickname: "Leo", level: "6ta", age: 9, gender: "Male", racketType: "Babolat Pure Drive Jr" },
-  { id: "stu-3", name: "Priya Nair", level: "1ra", age: 17, gender: "Female", racketType: "Head Speed Pro" },
-  { id: "stu-4", name: "Marcus Chen", nickname: "Marc", level: "4ta", age: 22, gender: "Male", racketType: "Yonex Ezone 98" },
-  { id: "stu-5", name: "Sofia Petrov", level: "6ta", age: 11, gender: "Female", racketType: "Wilson Roland Garros" },
-  { id: "stu-6", name: "Diego Alvarez", nickname: "Dee", level: "1ra", age: 19, gender: "Male", racketType: "Babolat Pure Aero" },
-  { id: "stu-7", name: "Grace Kim", level: "4ta", age: 15, gender: "Female", racketType: "Head Radical" },
-  { id: "stu-8", name: "Owen Fischer", nickname: "Ozzy", level: "6ta", age: 13, gender: "Male", racketType: "Wilson Ultra 100" },
+  { id: "stu-1", name: "Ana Reyes", nickname: "Ani", level: "4ta", age: 14, gender: "Female", hand: "Right", racketType: "Wilson Clash 100", since: new Date(2023, 8, 1), coachingNote: "Focusing on topspin forehand consistency." },
+  { id: "stu-2", name: "Leo Martins", nickname: "Leo", level: "6ta", age: 9, gender: "Male", hand: "Right", racketType: "Babolat Pure Drive Jr", since: new Date(2024, 5, 1) },
+  { id: "stu-3", name: "Priya Nair", level: "1ra", age: 17, gender: "Female", hand: "Left", racketType: "Head Speed Pro", since: new Date(2021, 2, 1), coachingNote: "Preparing for regional qualifiers; serve placement drills." },
+  { id: "stu-4", name: "Marcus Chen", nickname: "Marc", level: "4ta", age: 22, gender: "Male", hand: "Right", racketType: "Yonex Ezone 98", since: new Date(2022, 10, 1) },
+  { id: "stu-5", name: "Sofia Petrov", level: "6ta", age: 11, gender: "Female", hand: "Right", racketType: "Wilson Roland Garros", since: new Date(2024, 0, 1) },
+  { id: "stu-6", name: "Diego Alvarez", nickname: "Dee", level: "1ra", age: 19, gender: "Male", hand: "Left", racketType: "Babolat Pure Aero", since: new Date(2020, 7, 1), coachingNote: "Working on net approach timing." },
+  { id: "stu-7", name: "Grace Kim", level: "4ta", age: 15, gender: "Female", hand: "Right", racketType: "Head Radical", since: new Date(2023, 3, 1) },
+  { id: "stu-8", name: "Owen Fischer", nickname: "Ozzy", level: "6ta", age: 13, gender: "Male", hand: "Right", racketType: "Wilson Ultra 100", since: new Date(2024, 2, 1) },
 ]
 
 function atTime(base: Date, hour: number, minute: number, dayOffset = 0): Date {
@@ -216,6 +223,18 @@ export async function getUpcomingClasses(days = 7): Promise<ClassInstance[]> {
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
 
+export function getUpcomingClassesForStudent(
+  classes: ClassInstance[],
+  studentId: string,
+  days = 30
+): ClassInstance[] {
+  const now = new Date()
+  const horizon = new Date(now.getTime() + days * 24 * 60 * 60_000)
+  return classes
+    .filter((c) => c.studentId === studentId && c.startTime >= now && c.startTime < horizon)
+    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+}
+
 export async function getNextClass(): Promise<ClassInstance | undefined> {
   await delay(200)
   const now = new Date()
@@ -285,7 +304,7 @@ export async function getBusiestDayThisWeek(): Promise<string | undefined> {
   return counts[busiestIndex] > 0 ? WEEKDAY_ABBREVIATIONS[busiestIndex] : undefined
 }
 
-const STUDENT_LEVELS: StudentLevel[] = ["1ra", "2da", "3ra", "4ta", "5ta", "6ta"]
+export const STUDENT_LEVELS: StudentLevel[] = ["1ra", "2da", "3ra", "4ta", "5ta", "6ta"]
 
 export interface LevelClassCount {
   level: StudentLevel

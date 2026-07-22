@@ -30,11 +30,17 @@ function SelectValue(props: SelectPrimitive.Value.Props) {
 function SelectContent({ className, children, ...props }: SelectPrimitive.Popup.Props) {
   return (
     <SelectPrimitive.Portal>
-      <SelectPrimitive.Positioner sideOffset={6} className="z-50" align="start">
+      <SelectPrimitive.Positioner
+        sideOffset={6}
+        className="z-50"
+        align="start"
+        alignItemWithTrigger={false}
+        collisionAvoidance={{ side: "shift" }}
+      >
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            "max-h-72! overflow-y-auto rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg outline-none",
+            "max-h-[min(18rem,var(--available-height))]! overflow-y-auto rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg outline-none",
             "transition-all duration-150 motion-reduce:transition-none",
             "data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
             "data-[ending-style]:scale-95 data-[ending-style]:opacity-0",
