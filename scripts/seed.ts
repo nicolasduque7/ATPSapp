@@ -9,6 +9,14 @@
 // this script write on behalf of a coach without a real signed-in session.
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
+import {
+  addDays,
+  addMinutes,
+  formatDateOnly as localDate,
+  generateOccurrences,
+  toLocalTimestamp as localTimestamp,
+  type RecurrencePattern,
+} from "../src/lib/dates";
 import type {
   ClassType,
   CourtSurface,
@@ -48,14 +56,6 @@ function pad(n: number): string {
   return n.toString().padStart(2, "0");
 }
 
-function localDate(d: Date): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function localTimestamp(d: Date): string {
-  return `${localDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-}
-
 function localTime(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 }
@@ -67,17 +67,7 @@ function at(base: Date, dayOffset: number, hour: number, minute: number): Date {
   return d;
 }
 
-function addMinutes(d: Date, minutes: number): Date {
-  return new Date(d.getTime() + minutes * 60_000);
-}
-
-function addDays(d: Date, days: number): Date {
-  const copy = new Date(d);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
-// 0 = Monday .. 6 = Sunday, matching the `class_series.weekday` check constraint.
+// 0 = Monday .. 6 = Sunday, matching class_series.weekdays' convention.
 function mostRecentOrSameWeekday(from: Date, weekday: number): Date {
   const fromWeekday = (from.getDay() + 6) % 7;
   const diff = (fromWeekday - weekday + 7) % 7;
@@ -253,54 +243,95 @@ async function seed(): Promise<void> {
   const { error: oneOffError } = await supabase.from("classes").insert(oneOffRows);
   if (oneOffError) throw oneOffError;
 
+  async function insertSeries(options: {
+    student: string;
+    location: string;
+    pattern: RecurrencePattern;
+    startDate: Date;
+    endDate: Date;
+    hour: number;
+    minute: number;
+    durationMinutes: number;
+  }): Promise<number> {
+    const { student, location, pattern, startDate, endDate, hour, minute, durationMinutes } = options;
+
+    const { data: seriesRow, error: seriesError } = await supabase
+      .from("class_series")
+      .insert({
+        coach_id: coachId,
+        student_id: studentId(student),
+        location_id: locationId(location),
+        class_type: "Private",
+        frequency: pattern.frequency,
+        interval_count: pattern.intervalCount,
+        weekdays: pattern.weekdays ?? null,
+        day_of_month: pattern.dayOfMonth ?? null,
+        start_time: localTime(at(startDate, 0, hour, minute)),
+        duration_minutes: durationMinutes,
+        start_date: localDate(startDate),
+        end_date: localDate(endDate),
+      })
+      .select("id")
+      .single();
+    if (seriesError) throw seriesError;
+
+    const occurrences = generateOccurrences(pattern, startDate, endDate);
+    const instanceRows = occurrences.map((day) => {
+      const startTime = at(day, 0, hour, minute);
+      const endTime = addMinutes(startTime, durationMinutes);
+      return {
+        coach_id: coachId,
+        student_id: studentId(student),
+        location_id: locationId(location),
+        series_id: seriesRow.id,
+        class_type: "Private" as ClassType,
+        start_time: localTimestamp(startTime),
+        end_time: localTimestamp(endTime),
+        duration_minutes: durationMinutes,
+      };
+    });
+    const { error: instancesError } = await supabase.from("classes").insert(instanceRows);
+    if (instancesError) throw instancesError;
+
+    return instanceRows.length;
+  }
+
   console.log("Inserting recurring series (Leo Martins, weekly Tuesday)...");
   const TUESDAY = 1; // 0 = Monday
-  const seriesStart = addDays(mostRecentOrSameWeekday(now, TUESDAY), -21); // 3 weeks back
-  const seriesEnd = addDays(seriesStart, 8 * 7); // 8 weeks after start = 9 total instances
-  const seriesHour = 16;
-  const seriesMinute = 0;
-  const seriesDuration = 45;
+  const weeklySeriesStart = addDays(mostRecentOrSameWeekday(now, TUESDAY), -21); // 3 weeks back
+  const weeklySeriesEnd = addDays(weeklySeriesStart, 8 * 7); // 8 weeks after start = 9 total instances
+  const weeklyInstanceCount = await insertSeries({
+    student: "Leo Martins",
+    location: "Westside Park",
+    pattern: { frequency: "Weekly", intervalCount: 1, weekdays: [TUESDAY] },
+    startDate: weeklySeriesStart,
+    endDate: weeklySeriesEnd,
+    hour: 16,
+    minute: 0,
+    durationMinutes: 45,
+  });
 
-  const { data: series, error: seriesError } = await supabase
-    .from("class_series")
-    .insert({
-      coach_id: coachId,
-      student_id: studentId("Leo Martins"),
-      location_id: locationId("Westside Park"),
-      class_type: "Private",
-      weekday: TUESDAY,
-      start_time: localTime(at(seriesStart, 0, seriesHour, seriesMinute)),
-      duration_minutes: seriesDuration,
-      start_date: localDate(seriesStart),
-      end_date: localDate(seriesEnd),
-    })
-    .select("id")
-    .single();
-  if (seriesError) throw seriesError;
+  console.log("Inserting recurring series (Sofia Petrov, monthly on the 15th)...");
+  const monthlySeriesStart = addDays(now, -60);
+  const monthlySeriesEnd = addDays(now, 120);
+  const monthlyInstanceCount = await insertSeries({
+    student: "Sofia Petrov",
+    location: "Oakwood Tennis Club",
+    pattern: { frequency: "Monthly", intervalCount: 1, dayOfMonth: 15 },
+    startDate: monthlySeriesStart,
+    endDate: monthlySeriesEnd,
+    hour: 17,
+    minute: 0,
+    durationMinutes: 60,
+  });
 
-  const instanceRows = [];
-  for (let d = new Date(seriesStart); d <= seriesEnd; d = addDays(d, 7)) {
-    const startTime = at(d, 0, seriesHour, seriesMinute);
-    const endTime = addMinutes(startTime, seriesDuration);
-    instanceRows.push({
-      coach_id: coachId,
-      student_id: studentId("Leo Martins"),
-      location_id: locationId("Westside Park"),
-      series_id: series.id,
-      class_type: "Private" as ClassType,
-      start_time: localTimestamp(startTime),
-      end_time: localTimestamp(endTime),
-      duration_minutes: seriesDuration,
-    });
-  }
-  const { error: instancesError } = await supabase.from("classes").insert(instanceRows);
-  if (instancesError) throw instancesError;
+  const recurringInstanceCount = weeklyInstanceCount + monthlyInstanceCount;
 
   console.log("\nSeed complete.");
   console.log(`  Coach:     ${TEST_COACH_EMAIL} / ${TEST_COACH_PASSWORD} (id: ${coachId})`);
   console.log(`  Locations: ${locations.length}`);
   console.log(`  Students:  ${students.length}`);
-  console.log(`  Classes:   ${oneOffRows.length} one-off + ${instanceRows.length} from recurring series`);
+  console.log(`  Classes:   ${oneOffRows.length} one-off + ${recurringInstanceCount} from recurring series`);
 }
 
 seed().catch((err) => {

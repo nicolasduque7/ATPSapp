@@ -73,7 +73,7 @@ export function ClassCalendar({ events: initialEvents, students, locations }: Cl
   )
 
   function handleAddClick() {
-    setCreatingEvent(createDraftEvent(students, locations))
+    setCreatingEvent(createDraftEvent())
   }
 
   async function handleSave(submission: ClassFormSubmission) {

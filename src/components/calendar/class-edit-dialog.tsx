@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { getLocationColorStyle } from "@/lib/location-colors"
-import { addDays, addMinutes, combineDateAndTime } from "@/lib/dates"
+import { addDays, addMinutes, combineDateAndTime, type SeriesFrequency } from "@/lib/dates"
 import { getClassSeriesMeta } from "@/lib/actions/classes"
 import type { ClassType, Location, Student } from "@/lib/mock-data"
 import type { CalendarClassEvent, ClassFormSubmission } from "@/components/calendar/types"
@@ -32,6 +32,9 @@ interface ClassEditDialogProps {
 
 const CLASS_TYPES: ClassType[] = ["Private", "Group", "Match"]
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+const FREQUENCIES: SeriesFrequency[] = ["Daily", "Weekly", "Monthly"]
+const EVERY_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1)
+const DAY_OF_MONTH_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1)
 
 const DATE_RANGE_BEFORE = 14
 const DATE_RANGE_AFTER = 90
@@ -85,26 +88,54 @@ function durationBetween(startTime: string, endTime: string, today: Date): numbe
   return Math.round((end.getTime() - start.getTime()) / 60_000)
 }
 
-export function createDraftEvent(students: Student[], locations: Location[]): CalendarClassEvent {
+function pluralUnit(n: number, singular: string): string {
+  return n === 1 ? singular : `${singular}s`
+}
+
+function frequencyUnit(frequency: SeriesFrequency): string {
+  switch (frequency) {
+    case "Daily":
+      return "day"
+    case "Weekly":
+      return "week"
+    case "Monthly":
+      return "month"
+  }
+}
+
+function ordinal(n: number): string {
+  const rem100 = n % 100
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`
+  switch (n % 10) {
+    case 1:
+      return `${n}st`
+    case 2:
+      return `${n}nd`
+    case 3:
+      return `${n}rd`
+    default:
+      return `${n}th`
+  }
+}
+
+export function createDraftEvent(): CalendarClassEvent {
   const now = new Date()
   const start = new Date(now)
   start.setMinutes(start.getMinutes() < 30 ? 30 : 0, 0, 0)
   if (start.getMinutes() === 0) start.setHours(start.getHours() + 1)
   const end = addMinutes(start, 60)
-  const student = students[0]
-  const location = locations[0]
 
   return {
     id: "draft",
-    title: student?.name ?? "",
+    title: "",
     start,
     end,
     resource: {
-      studentId: student?.id ?? "",
-      studentName: student?.name ?? "",
-      level: student?.level ?? "1ra",
-      locationId: location?.id ?? "",
-      locationName: location?.name ?? "",
+      studentId: "",
+      studentName: "",
+      level: "1ra",
+      locationId: "",
+      locationName: "",
       durationMinutes: 60,
       type: "Private",
       seriesId: null,
@@ -165,9 +196,15 @@ function ClassEditForm({
   onDelete,
 }: ClassEditFormProps) {
   const formId = useId()
-  const [studentId, setStudentId] = useState(event.resource.studentId)
-  const [locationId, setLocationId] = useState(event.resource.locationId)
-  const [classType, setClassType] = useState<ClassType>(event.resource.type)
+  const [studentId, setStudentId] = useState<string | null>(
+    mode === "create" ? null : event.resource.studentId
+  )
+  const [locationId, setLocationId] = useState<string | null>(
+    mode === "create" ? null : event.resource.locationId
+  )
+  const [classType, setClassType] = useState<ClassType | null>(
+    mode === "create" ? null : event.resource.type
+  )
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -196,7 +233,10 @@ function ClassEditForm({
 
   // Recurring-pattern fields: creating a series, or editing the whole series.
   const [recurringStartOffset, setRecurringStartOffset] = useState(initialDateOffset)
-  const [recurringWeekday, setRecurringWeekday] = useState(() => (event.start.getDay() + 6) % 7)
+  const [frequency, setFrequency] = useState<SeriesFrequency>("Weekly")
+  const [intervalCount, setIntervalCount] = useState(1)
+  const [recurringWeekdays, setRecurringWeekdays] = useState<number[]>([])
+  const [dayOfMonth, setDayOfMonth] = useState(1)
   const [recurringStartTime, setRecurringStartTime] = useState(() => toTimeInputValue(event.start))
   const [recurringEndTime, setRecurringEndTime] = useState(() => toTimeInputValue(event.end))
   const [recurringUntilOffset, setRecurringUntilOffset] = useState(
@@ -216,7 +256,10 @@ function ClassEditForm({
     getClassSeriesMeta(seriesId)
       .then((meta) => {
         if (cancelled) return
-        setRecurringWeekday(meta.weekday)
+        setFrequency(meta.frequency)
+        setIntervalCount(meta.intervalCount)
+        setRecurringWeekdays(meta.weekdays ?? [])
+        setDayOfMonth(meta.dayOfMonth ?? 1)
         setRecurringStartTime(meta.startTime)
         const start = combineDateAndTime(today, meta.startTime)
         setRecurringEndTime(toTimeInputValue(addMinutes(start, meta.durationMinutes)))
@@ -242,8 +285,19 @@ function ClassEditForm({
     [recurringStartOffset, recurringUntilOffset]
   )
 
+  function toggleRecurringWeekday(day: number) {
+    setRecurringWeekdays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)
+    )
+  }
+
   async function handleSubmit(formEvent: React.FormEvent) {
     formEvent.preventDefault()
+
+    if (!studentId || !locationId || !classType) {
+      setError("Select a student, location, and type.")
+      return
+    }
 
     const student = students.find((s) => s.id === studentId)
     const location = locations.find((l) => l.id === locationId)
@@ -259,6 +313,10 @@ function ClassEditForm({
         setError("Until date must be on or after the start date.")
         return
       }
+      if (frequency === "Weekly" && recurringWeekdays.length === 0) {
+        setError("Select at least one day of the week.")
+        return
+      }
     } else {
       if (singleEndTime <= singleStartTime) {
         setError("End time must be after the start time.")
@@ -271,6 +329,8 @@ function ClassEditForm({
     try {
       if (usingRecurringFields) {
         const durationMinutes = durationBetween(recurringStartTime, recurringEndTime, today)
+        const weekdays = frequency === "Weekly" ? recurringWeekdays : null
+        const dayOfMonthValue = frequency === "Monthly" ? dayOfMonth : null
         if (mode === "create") {
           await onSave({
             kind: "series-create",
@@ -278,6 +338,10 @@ function ClassEditForm({
               studentId: student.id,
               locationId: location.id,
               type: classType,
+              frequency,
+              intervalCount,
+              weekdays,
+              dayOfMonth: dayOfMonthValue,
               startDate: addDays(today, recurringStartOffset),
               startTime: recurringStartTime,
               durationMinutes,
@@ -292,7 +356,9 @@ function ClassEditForm({
               studentId: student.id,
               locationId: location.id,
               type: classType,
-              weekday: recurringWeekday,
+              intervalCount,
+              weekdays,
+              dayOfMonth: dayOfMonthValue,
               startTime: recurringStartTime,
               durationMinutes,
               endDate: addDays(today, recurringUntilOffset),
@@ -343,9 +409,10 @@ function ClassEditForm({
           <Select value={studentId} onValueChange={(value) => setStudentId(value as string)}>
             <SelectTrigger id={`${formId}-student`}>
               <SelectValue>
-                {(value: string) => {
+                {(value: string | null) => {
                   const s = students.find((student) => student.id === value)
-                  return s ? `${s.name} · ${s.level}` : ""
+                  if (!s) return <span className="text-muted-foreground">Select a student</span>
+                  return `${s.name} · ${s.level}`
                 }}
               </SelectValue>
             </SelectTrigger>
@@ -485,32 +552,114 @@ function ClassEditForm({
               />
             )}
 
-            {mode === "edit" && (
+            <div className="grid grid-cols-2 gap-4">
+              {mode === "create" ? (
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor={`${formId}-frequency`}
+                    className="text-xs font-medium text-muted-foreground"
+                  >
+                    Frequency
+                  </label>
+                  <Select
+                    value={frequency}
+                    onValueChange={(value) => setFrequency(value as SeriesFrequency)}
+                  >
+                    <SelectTrigger id={`${formId}-frequency`}>
+                      <SelectValue>{(value: SeriesFrequency) => value}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FREQUENCIES.map((f) => (
+                        <SelectItem key={f} value={f}>
+                          {f}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <ReadOnlyField
+                  label="Frequency"
+                  value={frequency}
+                  caption="Can't be changed after creation."
+                />
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor={`${formId}-every`} className="text-xs font-medium text-muted-foreground">
+                  Every
+                </label>
+                <Select
+                  value={String(intervalCount)}
+                  onValueChange={(value) => setIntervalCount(Number(value as string))}
+                >
+                  <SelectTrigger id={`${formId}-every`}>
+                    <SelectValue>
+                      {(value: string) => `${value} ${pluralUnit(Number(value), frequencyUnit(frequency))}`}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVERY_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n} {pluralUnit(n, frequencyUnit(frequency))}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {frequency === "Weekly" && (
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-muted-foreground">Repeats on</span>
                 <div
-                  role="radiogroup"
-                  aria-label="Weekday"
+                  role="group"
+                  aria-label="Weekdays"
                   className="grid grid-cols-7 gap-1 rounded-full bg-muted p-1"
                 >
-                  {WEEKDAY_LABELS.map((label, index) => (
-                    <button
-                      key={label}
-                      type="button"
-                      role="radio"
-                      aria-checked={recurringWeekday === index}
-                      onClick={() => setRecurringWeekday(index)}
-                      className={cn(
-                        "cursor-pointer rounded-full px-1 py-1.5 text-xs font-medium transition-colors duration-200 motion-reduce:transition-none",
-                        recurringWeekday === index
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  {WEEKDAY_LABELS.map((label, index) => {
+                    const selected = recurringWeekdays.includes(index)
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => toggleRecurringWeekday(index)}
+                        className={cn(
+                          "cursor-pointer rounded-full px-1 py-1.5 text-xs font-medium transition-colors duration-200 motion-reduce:transition-none",
+                          selected
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
                 </div>
+              </div>
+            )}
+
+            {frequency === "Monthly" && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor={`${formId}-day-of-month`} className="text-xs font-medium text-muted-foreground">
+                  Day of month
+                </label>
+                <Select
+                  value={String(dayOfMonth)}
+                  onValueChange={(value) => setDayOfMonth(Number(value as string))}
+                >
+                  <SelectTrigger id={`${formId}-day-of-month`}>
+                    <SelectValue>{(value: string) => ordinal(Number(value))}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAY_OF_MONTH_OPTIONS.map((d) => (
+                      <SelectItem key={d} value={String(d)}>
+                        {ordinal(d)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
@@ -726,6 +875,24 @@ function TimeField({ id, label, value, onChange }: TimeFieldProps) {
           ))}
         </SelectContent>
       </Select>
+    </div>
+  )
+}
+
+interface ReadOnlyFieldProps {
+  label: string
+  value: string
+  caption?: string
+}
+
+function ReadOnlyField({ label, value, caption }: ReadOnlyFieldProps) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="flex h-9 items-center rounded-xl border border-input bg-muted px-3 text-sm text-foreground">
+        {value}
+      </div>
+      {caption && <span className="text-[0.7rem] text-muted-foreground">{caption}</span>}
     </div>
   )
 }

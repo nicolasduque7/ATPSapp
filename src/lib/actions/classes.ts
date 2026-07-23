@@ -8,9 +8,11 @@ import {
   addMinutes,
   combineDateAndTime,
   formatDateOnly,
-  generateWeeklyOccurrences,
+  generateOccurrences,
   parseDateOnly,
   toLocalTimestamp,
+  type RecurrencePattern,
+  type SeriesFrequency,
 } from "@/lib/dates";
 import type { ClassInstance, ClassType } from "@/lib/mock-data";
 import { mapClassRow, CLASS_COLUMNS } from "@/lib/queries/class-row";
@@ -28,24 +30,29 @@ export interface ClassSeriesInput {
   studentId: string;
   locationId: string;
   type: ClassType;
+  frequency: SeriesFrequency;
+  intervalCount: number;
+  weekdays?: number[] | null; // required (non-empty) when frequency === "Weekly"
+  dayOfMonth?: number | null; // required when frequency === "Monthly", 1-30
   startDate: Date;
-  startTime: string; // "HH:mm"; weekday is derived from startDate
-  durationMinutes: number;
-  endDate: Date;
-}
-
-export interface ClassSeriesUpdateInput {
-  studentId: string;
-  locationId: string;
-  type: ClassType;
-  weekday: number; // 0 = Monday .. 6 = Sunday
   startTime: string; // "HH:mm"
   durationMinutes: number;
   endDate: Date;
 }
 
-function weekdayOf(date: Date): number {
-  return (date.getDay() + 6) % 7;
+// Frequency is intentionally absent — it's locked at creation. The action
+// re-reads it from the DB after updating so a crafted request can't change
+// it via this path either.
+export interface ClassSeriesUpdateInput {
+  studentId: string;
+  locationId: string;
+  type: ClassType;
+  intervalCount: number;
+  weekdays?: number[] | null;
+  dayOfMonth?: number | null;
+  startTime: string; // "HH:mm"
+  durationMinutes: number;
+  endDate: Date;
 }
 
 interface SeriesInstanceRow {
@@ -116,9 +123,20 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<ClassI
   if (input.endDate < input.startDate) {
     throw new Error("Until date must be on or after the start date.");
   }
+  if (input.frequency === "Weekly" && !input.weekdays?.length) {
+    throw new Error("Select at least one day of the week.");
+  }
+  if (input.frequency === "Monthly" && !input.dayOfMonth) {
+    throw new Error("Select a day of the month.");
+  }
 
-  const weekday = weekdayOf(input.startDate);
-  const occurrences = generateWeeklyOccurrences(input.startDate, input.endDate, weekday);
+  const pattern: RecurrencePattern = {
+    frequency: input.frequency,
+    intervalCount: input.intervalCount,
+    weekdays: input.frequency === "Weekly" ? input.weekdays : null,
+    dayOfMonth: input.frequency === "Monthly" ? input.dayOfMonth : null,
+  };
+  const occurrences = generateOccurrences(pattern, input.startDate, input.endDate);
   if (occurrences.length === 0) {
     throw new Error("Until date must be on or after the start date.");
   }
@@ -130,7 +148,10 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<ClassI
       student_id: input.studentId,
       location_id: input.locationId,
       class_type: input.type,
-      weekday,
+      frequency: input.frequency,
+      interval_count: input.intervalCount,
+      weekdays: pattern.weekdays,
+      day_of_month: pattern.dayOfMonth,
       start_time: `${input.startTime}:00`,
       duration_minutes: input.durationMinutes,
       start_date: formatDateOnly(input.startDate),
@@ -169,19 +190,23 @@ export async function updateClassSeries(
   const supabase = await createClient();
   const now = new Date();
 
-  const { error: seriesError } = await supabase
+  const { data: updatedSeries, error: seriesError } = await supabase
     .from("class_series")
     .update({
       student_id: input.studentId,
       location_id: input.locationId,
       class_type: input.type,
-      weekday: input.weekday,
+      interval_count: input.intervalCount,
+      weekdays: input.weekdays ?? null,
+      day_of_month: input.dayOfMonth ?? null,
       start_time: `${input.startTime}:00`,
       duration_minutes: input.durationMinutes,
       end_date: formatDateOnly(input.endDate),
     })
     .eq("id", seriesId)
-    .eq("coach_id", coachId);
+    .eq("coach_id", coachId)
+    .select("frequency")
+    .single();
 
   if (seriesError) {
     console.error("updateClassSeries failed:", seriesError);
@@ -200,7 +225,13 @@ export async function updateClassSeries(
     throw new Error("Couldn't save the series. Try again.");
   }
 
-  const occurrences = generateWeeklyOccurrences(now, input.endDate, input.weekday).filter(
+  const pattern: RecurrencePattern = {
+    frequency: updatedSeries.frequency,
+    intervalCount: input.intervalCount,
+    weekdays: input.weekdays,
+    dayOfMonth: input.dayOfMonth,
+  };
+  const occurrences = generateOccurrences(pattern, now, input.endDate).filter(
     (day) => combineDateAndTime(day, input.startTime) > now,
   );
 
@@ -231,7 +262,10 @@ export async function updateClassSeries(
 }
 
 export interface ClassSeriesMeta {
-  weekday: number;
+  frequency: SeriesFrequency;
+  intervalCount: number;
+  weekdays: number[] | null;
+  dayOfMonth: number | null;
   startTime: string; // "HH:mm"
   durationMinutes: number;
   endDate: Date;
@@ -246,7 +280,7 @@ export async function getClassSeriesMeta(seriesId: string): Promise<ClassSeriesM
 
   const { data, error } = await supabase
     .from("class_series")
-    .select("weekday, start_time, duration_minutes, end_date")
+    .select("frequency, interval_count, weekdays, day_of_month, start_time, duration_minutes, end_date")
     .eq("id", seriesId)
     .eq("coach_id", coachId)
     .single();
@@ -257,7 +291,10 @@ export async function getClassSeriesMeta(seriesId: string): Promise<ClassSeriesM
   }
 
   return {
-    weekday: data.weekday,
+    frequency: data.frequency,
+    intervalCount: data.interval_count,
+    weekdays: data.weekdays,
+    dayOfMonth: data.day_of_month,
     startTime: data.start_time.slice(0, 5),
     durationMinutes: data.duration_minutes,
     endDate: parseDateOnly(data.end_date),

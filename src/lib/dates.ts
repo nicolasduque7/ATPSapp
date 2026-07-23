@@ -39,20 +39,109 @@ export function combineDateAndTime(day: Date, time: string): Date {
   return next
 }
 
-// Returns every occurrence of `weekday` (0 = Monday .. 6 = Sunday, matching
-// class_series' convention) between `from` and `until`, inclusive, as
-// midnight-local Date objects. Both bounds are normalized to calendar days
-// first so a caller passing a live timestamp (e.g. `new Date()`) doesn't
-// get tripped up by its time-of-day when compared against a day-only bound.
-export function generateWeeklyOccurrences(from: Date, until: Date, weekday: number): Date[] {
-  const fromDay = new Date(from.getFullYear(), from.getMonth(), from.getDate())
-  const untilDay = new Date(until.getFullYear(), until.getMonth(), until.getDate())
-  const fromWeekday = (fromDay.getDay() + 6) % 7
-  const diff = (weekday - fromWeekday + 7) % 7
+function dateOnly(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+export type SeriesFrequency = "Daily" | "Weekly" | "Monthly"
+
+export interface RecurrencePattern {
+  frequency: SeriesFrequency
+  intervalCount: number
+  // Required (non-empty) when frequency is "Weekly": 0 = Monday .. 6 = Sunday.
+  weekdays?: number[] | null
+  // Required when frequency is "Monthly": 1-30.
+  dayOfMonth?: number | null
+}
+
+function generateDailyOccurrences(from: Date, until: Date, intervalDays: number): Date[] {
+  const fromDay = dateOnly(from)
+  const untilDay = dateOnly(until)
 
   const occurrences: Date[] = []
-  for (let cursor = addDays(fromDay, diff); cursor <= untilDay; cursor = addDays(cursor, 7)) {
+  for (let cursor = fromDay; cursor <= untilDay; cursor = addDays(cursor, intervalDays)) {
     occurrences.push(cursor)
   }
   return occurrences
+}
+
+// Every occurrence of any of `weekdays` (0 = Monday .. 6 = Sunday) between
+// `from` and `until`, inclusive, repeating every `intervalWeeks` weeks. The
+// first cycle is anchored to the Monday of `from`'s own week so a multi-day
+// pattern (e.g. Mon + Wed) lands on the correct pair from the start, then
+// each later cycle jumps `intervalWeeks` weeks at a time.
+function generateWeeklyOccurrences(
+  from: Date,
+  until: Date,
+  weekdays: number[],
+  intervalWeeks: number,
+): Date[] {
+  const fromDay = dateOnly(from)
+  const untilDay = dateOnly(until)
+  const fromWeekday = (fromDay.getDay() + 6) % 7
+  const anchorWeekStart = addDays(fromDay, -fromWeekday)
+  const sortedWeekdays = [...weekdays].sort((a, b) => a - b)
+
+  const occurrences: Date[] = []
+  for (
+    let cycleStart = anchorWeekStart;
+    cycleStart <= untilDay;
+    cycleStart = addDays(cycleStart, 7 * intervalWeeks)
+  ) {
+    for (const weekday of sortedWeekdays) {
+      const occurrence = addDays(cycleStart, weekday)
+      if (occurrence >= fromDay && occurrence <= untilDay) {
+        occurrences.push(occurrence)
+      }
+    }
+  }
+  return occurrences
+}
+
+function lastDayOfMonth(year: number, monthIndex0: number): number {
+  return new Date(year, monthIndex0 + 1, 0).getDate()
+}
+
+// Every occurrence of `dayOfMonth` between `from` and `until`, inclusive,
+// repeating every `intervalMonths` months. A month too short for the chosen
+// day (e.g. day 30 in February) clamps to that month's last day rather than
+// skipping it.
+function generateMonthlyOccurrences(
+  from: Date,
+  until: Date,
+  dayOfMonth: number,
+  intervalMonths: number,
+): Date[] {
+  const fromDay = dateOnly(from)
+  const untilDay = dateOnly(until)
+
+  const occurrences: Date[] = []
+  let year = fromDay.getFullYear()
+  let month = fromDay.getMonth()
+
+  while (true) {
+    const clampedDay = Math.min(dayOfMonth, lastDayOfMonth(year, month))
+    const occurrence = new Date(year, month, clampedDay)
+    if (occurrence > untilDay) break
+    if (occurrence >= fromDay) occurrences.push(occurrence)
+
+    month += intervalMonths
+    year += Math.floor(month / 12)
+    month = ((month % 12) + 12) % 12
+  }
+  return occurrences
+}
+
+// Returns every occurrence of `pattern` between `from` and `until`,
+// inclusive, as midnight-local Date objects. Both bounds may carry a
+// time-of-day (e.g. a live `new Date()`) — only their calendar day matters.
+export function generateOccurrences(pattern: RecurrencePattern, from: Date, until: Date): Date[] {
+  switch (pattern.frequency) {
+    case "Daily":
+      return generateDailyOccurrences(from, until, pattern.intervalCount)
+    case "Weekly":
+      return generateWeeklyOccurrences(from, until, pattern.weekdays ?? [], pattern.intervalCount)
+    case "Monthly":
+      return generateMonthlyOccurrences(from, until, pattern.dayOfMonth ?? 1, pattern.intervalCount)
+  }
 }

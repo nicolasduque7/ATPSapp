@@ -39,7 +39,9 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
 - Location: id, coach_id, name, [address?]
 - Student: id, coach_id, name, nickname, level, age, gender, racket_type
 - ClassSeries (recurrence rule, ONLY for recurring): id, coach_id, student_id,
-  location_id, weekday, start_time, duration, start_date, end_date (required)
+  location_id, frequency (Daily/Weekly/Monthly), interval_count ("every N"
+  days/weeks/months), weekdays (multi-select, Weekly only), day_of_month
+  (1-30, Monthly only), start_time, duration, start_date, end_date (required)
 - Class (a single instance on the calendar — this is what the calendar reads):
   id, coach_id, student_id, location_id, series_id (nullable — null = one-off),
   start_time, end_time, duration, completed (bool), [notes?]
@@ -50,7 +52,20 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
 - Accounts: multiple coaches, each isolated to their own data.
 - ClassSeries end_date: required (no indefinite recurrences).
 - Recurring class instances: generated up-front on series creation.
-- Editing a recurring class: three options — (a) this instance only, (b) this and all future instances, (c) the whole series.
+- Editing a recurring class: two options — (a) this instance only, or (b) the
+  whole series (whole-series edits regenerate future instances only; past/
+  completed ones are left alone). The "this and all future instances" middle
+  option from the original plan was dropped in favor of this simpler model.
+- A series' frequency (Daily/Weekly/Monthly) is locked at creation — editing
+  the whole series can change its interval, weekdays/day-of-month, time,
+  location, and type, but not the frequency itself. To change frequency,
+  delete the series and create a new one.
+- Weekly series support multiple weekdays (e.g. Mon + Wed) as ONE combined
+  series — not one series per weekday — so "whole series" edit/delete acts
+  on all selected weekdays together.
+- Monthly series: if the chosen day-of-month (1-30) doesn't exist in a given
+  month (e.g. day 30 in February), that occurrence clamps to the month's
+  last day rather than being skipped.
 - `completed` flag: auto-set when now > end_time (dashboard reads this flag, which effectively mirrors the clock).
 - Calendar booking flow: one form with a one-off/recurring toggle; recurrence fields appear when toggle is on.
 - Home dashboard extra metric: weekly hours coached.
