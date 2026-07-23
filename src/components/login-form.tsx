@@ -1,0 +1,51 @@
+"use client"
+
+import { useActionState, useId } from "react"
+
+import { login, type LoginState } from "@/app/login/actions"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+
+const initialState: LoginState = {}
+
+export function LoginForm() {
+  const formId = useId()
+  const [state, action, pending] = useActionState(login, initialState)
+
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={`${formId}-email`} className="text-xs font-medium text-muted-foreground">
+          Email
+        </label>
+        <Input
+          id={`${formId}-email`}
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          placeholder="you@example.com"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={`${formId}-password`} className="text-xs font-medium text-muted-foreground">
+          Password
+        </label>
+        <Input
+          id={`${formId}-password`}
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+        />
+      </div>
+
+      {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+
+      <Button type="submit" variant="positive" className="mt-2 w-full" disabled={pending}>
+        {pending ? "Signing in…" : "Sign in"}
+      </Button>
+    </form>
+  )
+}

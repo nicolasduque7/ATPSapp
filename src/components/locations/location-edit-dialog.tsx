@@ -14,14 +14,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { getSurfaceColorStyle } from "@/lib/surface-colors"
+import type { LocationInput } from "@/lib/actions/locations"
 import type { CourtSurface, Location } from "@/lib/mock-data"
 
 interface LocationEditDialogProps {
   location: Location | null
   mode: "create" | "edit"
   onOpenChange: (open: boolean) => void
-  onSave: (location: Location) => void
-  onDelete: (locationId: string) => void
+  onSave: (input: LocationInput) => Promise<void>
+  onDelete: (locationId: string) => Promise<void>
 }
 
 const SURFACE_OPTIONS: CourtSurface[] = ["Hard", "Clay", "Both"]
@@ -59,8 +60,8 @@ interface LocationEditFormProps {
   location: Location
   mode: "create" | "edit"
   onOpenChange: (open: boolean) => void
-  onSave: (location: Location) => void
-  onDelete: (locationId: string) => void
+  onSave: (input: LocationInput) => Promise<void>
+  onDelete: (locationId: string) => Promise<void>
 }
 
 function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: LocationEditFormProps) {
@@ -71,9 +72,12 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
   const [hardCourts, setHardCourts] = useState(location.hardCourts)
   const [clayCourts, setClayCourts] = useState(location.clayCourts)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  function handleSubmit(formEvent: React.FormEvent) {
+  async function handleSubmit(formEvent: React.FormEvent) {
     formEvent.preventDefault()
 
     if (!name.trim()) {
@@ -81,15 +85,33 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
       return
     }
 
-    onSave({
-      ...location,
-      name: name.trim(),
-      address: address.trim() || undefined,
-      surface,
-      hardCourts: surface === "Clay" ? 0 : hardCourts,
-      clayCourts: surface === "Hard" ? 0 : clayCourts,
-    })
-    onOpenChange(false)
+    setError(null)
+    setSaving(true)
+    try {
+      await onSave({
+        name: name.trim(),
+        address: address.trim() || undefined,
+        surface,
+        hardCourts: surface === "Clay" ? 0 : hardCourts,
+        clayCourts: surface === "Hard" ? 0 : clayCourts,
+      })
+      onOpenChange(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Try again.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleConfirmDelete() {
+    setDeleteError(null)
+    setDeleting(true)
+    try {
+      await onDelete(location.id)
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete location. Try again.")
+      setDeleting(false)
+    }
   }
 
   return (
@@ -190,29 +212,40 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
       </form>
 
       <DialogFooter>
-        <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+        <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit" form={formId} variant="positive">
-          Save
+        <Button type="submit" form={formId} variant="positive" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
         </Button>
       </DialogFooter>
 
       {mode === "edit" && (
-        <div className="mt-4 border-t border-border pt-4">
+        <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           {confirmingDelete ? (
             <div className="flex items-center gap-2">
               <p className="flex-1 text-sm text-foreground">Delete this location?</p>
-              <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmingDelete(false)}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setConfirmingDelete(false)
+                  setDeleteError(null)
+                }}
+                disabled={deleting}
+              >
                 Keep location
               </Button>
               <Button
                 type="button"
                 variant="destructive"
                 size="sm"
-                onClick={() => onDelete(location.id)}
+                onClick={handleConfirmDelete}
+                disabled={deleting}
               >
-                Confirm delete
+                {deleting ? "Deleting…" : "Confirm delete"}
               </Button>
             </div>
           ) : (

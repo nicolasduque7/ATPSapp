@@ -6,21 +6,20 @@ import { MapPin, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SurfacePill } from "@/components/locations/surface-pill"
 import { LocationEditDialog } from "@/components/locations/location-edit-dialog"
+import { createLocation, deleteLocation, updateLocation, type LocationInput } from "@/lib/actions/locations"
 import type { Location } from "@/lib/mock-data"
 
 interface LocationsViewProps {
   locations: Location[]
 }
 
-function createDraftLocation(): Location {
-  return {
-    id: `loc-${crypto.randomUUID()}`,
-    name: "",
-    address: "",
-    surface: "Hard",
-    hardCourts: 0,
-    clayCourts: 0,
-  }
+const DRAFT_LOCATION: Location = {
+  id: "draft",
+  name: "",
+  address: "",
+  surface: "Hard",
+  hardCourts: 0,
+  clayCourts: 0,
 }
 
 export function LocationsView({ locations: initialLocations }: LocationsViewProps) {
@@ -30,7 +29,7 @@ export function LocationsView({ locations: initialLocations }: LocationsViewProp
 
   function handleAddClick() {
     setMode("create")
-    setEditingLocation(createDraftLocation())
+    setEditingLocation(DRAFT_LOCATION)
   }
 
   function handleCardClick(location: Location) {
@@ -38,16 +37,18 @@ export function LocationsView({ locations: initialLocations }: LocationsViewProp
     setEditingLocation(location)
   }
 
-  function handleSave(saved: Location) {
-    setLocations((prev) => {
-      const exists = prev.some((location) => location.id === saved.id)
-      return exists
-        ? prev.map((location) => (location.id === saved.id ? saved : location))
-        : [...prev, saved]
-    })
+  async function handleSave(input: LocationInput) {
+    if (mode === "create") {
+      const created = await createLocation(input)
+      setLocations((prev) => [...prev, created])
+    } else if (editingLocation) {
+      const saved = await updateLocation(editingLocation.id, input)
+      setLocations((prev) => prev.map((location) => (location.id === saved.id ? saved : location)))
+    }
   }
 
-  function handleDelete(locationId: string) {
+  async function handleDelete(locationId: string) {
+    await deleteLocation(locationId)
     setLocations((prev) => prev.filter((location) => location.id !== locationId))
     setEditingLocation(null)
   }

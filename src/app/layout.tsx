@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist_Mono, Inter, Manrope } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { AppShell } from "@/components/app-shell";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -36,9 +35,7 @@ export default function RootLayout({
       className={`${inter.variable} ${manrope.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <ThemeProvider>
-          <AppShell>{children}</AppShell>
-        </ThemeProvider>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
