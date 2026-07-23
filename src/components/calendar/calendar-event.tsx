@@ -5,6 +5,8 @@ import type { EventProps } from "react-big-calendar"
 
 import { LevelBadge } from "@/components/level-badge"
 import { LocationTag } from "@/components/location-tag"
+import { ClassTypeTag } from "@/components/class-type-tag"
+import { RecurringTag } from "@/components/recurring-tag"
 import type { CalendarClassEvent } from "@/components/calendar/types"
 
 function formatTime(date: Date): string {
@@ -29,7 +31,7 @@ function formatDuration(minutes: number): string {
 export function ClassEventTile({ event }: EventProps<CalendarClassEvent>) {
   const ref = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState<number | null>(null)
-  const { studentName, level, locationName, durationMinutes } = event.resource
+  const { studentName, level, locationName, durationMinutes, type, seriesId } = event.resource
 
   useEffect(() => {
     const el = ref.current
@@ -41,6 +43,7 @@ export function ClassEventTile({ event }: EventProps<CalendarClassEvent>) {
 
   const showLocation = height === null || height >= 46
   const showBadge = height === null || height >= 22
+  const showTags = height === null || height >= 60
 
   return (
     <div
@@ -58,6 +61,17 @@ export function ClassEventTile({ event }: EventProps<CalendarClassEvent>) {
       </div>
       {showLocation && (
         <LocationTag name={locationName} className="px-1 py-0 text-[7px] leading-[1.4]" />
+      )}
+      {showTags && (
+        <div className="flex shrink-0 flex-wrap items-center gap-1">
+          <ClassTypeTag type={type} className="px-1 py-0 text-[7px] leading-[1.4]" />
+          {seriesId && (
+            <RecurringTag
+              className="gap-0.5 px-1 py-0 text-[7px] leading-[1.4]"
+              iconClassName="size-2"
+            />
+          )}
+        </div>
       )}
     </div>
   )

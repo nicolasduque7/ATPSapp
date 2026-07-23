@@ -62,8 +62,12 @@ export function StudentsView({
     setEditingStudent(null)
   }
 
-  function handleSaveClass(saved: ClassInstance) {
+  function handleSaveClassInstance(saved: ClassInstance) {
     setClasses((prev) => prev.map((c) => (c.id === saved.id ? saved : c)))
+  }
+
+  function handleSaveClassSeries(seriesId: string, instances: ClassInstance[]) {
+    setClasses((prev) => [...prev.filter((c) => c.seriesId !== seriesId), ...instances])
   }
 
   function handleDeleteClass(target: { classId?: string; seriesId?: string }) {
@@ -131,7 +135,8 @@ export function StudentsView({
         }}
         onSave={handleSaveStudent}
         onDelete={handleDeleteStudent}
-        onSaveClass={handleSaveClass}
+        onSaveClassInstance={handleSaveClassInstance}
+        onSaveClassSeries={handleSaveClassSeries}
         onDeleteClass={handleDeleteClass}
       />
     </div>

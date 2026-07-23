@@ -18,10 +18,15 @@ import { Avatar } from "@/components/avatar"
 import { LevelBadge } from "@/components/level-badge"
 import { MonthYearPicker } from "@/components/month-year-picker"
 import { ClassEditDialog } from "@/components/calendar/class-edit-dialog"
-import type { CalendarClassEvent } from "@/components/calendar/types"
+import type { CalendarClassEvent, ClassFormSubmission } from "@/components/calendar/types"
 import { cn } from "@/lib/utils"
 import { getLocationColorStyle } from "@/lib/location-colors"
-import { updateClassInstance, deleteClassInstance, deleteClassSeries } from "@/lib/actions/classes"
+import {
+  updateClassInstance,
+  updateClassSeries,
+  deleteClassInstance,
+  deleteClassSeries,
+} from "@/lib/actions/classes"
 import type { StudentInput } from "@/lib/actions/students"
 import {
   STUDENT_LEVELS,
@@ -42,7 +47,8 @@ interface StudentProfileDialogProps {
   onOpenChange: (open: boolean) => void
   onSave: (input: StudentInput) => Promise<void>
   onDelete: (studentId: string) => Promise<void>
-  onSaveClass: (classInstance: ClassInstance) => void
+  onSaveClassInstance: (classInstance: ClassInstance) => void
+  onSaveClassSeries: (seriesId: string, instances: ClassInstance[]) => void
   onDeleteClass: (target: { classId?: string; seriesId?: string }) => void
 }
 
@@ -69,7 +75,8 @@ export function StudentProfileDialog({
   onOpenChange,
   onSave,
   onDelete,
-  onSaveClass,
+  onSaveClassInstance,
+  onSaveClassSeries,
   onDeleteClass,
 }: StudentProfileDialogProps) {
   return (
@@ -89,7 +96,8 @@ export function StudentProfileDialog({
             onOpenChange={onOpenChange}
             onSave={onSave}
             onDelete={onDelete}
-            onSaveClass={onSaveClass}
+            onSaveClassInstance={onSaveClassInstance}
+            onSaveClassSeries={onSaveClassSeries}
             onDeleteClass={onDeleteClass}
           />
         )}
@@ -106,7 +114,8 @@ interface StudentProfileFormProps {
   onOpenChange: (open: boolean) => void
   onSave: (input: StudentInput) => Promise<void>
   onDelete: (studentId: string) => Promise<void>
-  onSaveClass: (classInstance: ClassInstance) => void
+  onSaveClassInstance: (classInstance: ClassInstance) => void
+  onSaveClassSeries: (seriesId: string, instances: ClassInstance[]) => void
   onDeleteClass: (target: { classId?: string; seriesId?: string }) => void
 }
 
@@ -118,7 +127,8 @@ function StudentProfileForm({
   onOpenChange,
   onSave,
   onDelete,
-  onSaveClass,
+  onSaveClassInstance,
+  onSaveClassSeries,
   onDeleteClass,
 }: StudentProfileFormProps) {
   const formId = useId()
@@ -206,17 +216,22 @@ function StudentProfileForm({
     }
   }
 
-  async function handleSaveClass(updated: CalendarClassEvent) {
-    if (!selectedClass) return
-    const saved = await updateClassInstance(selectedClass.id, {
-      studentId: updated.resource.studentId,
-      locationId: updated.resource.locationId,
-      type: updated.resource.type,
-      startTime: updated.start,
-      endTime: updated.end,
-      durationMinutes: updated.resource.durationMinutes,
-    })
-    onSaveClass(saved)
+  async function handleSaveClass(submission: ClassFormSubmission) {
+    switch (submission.kind) {
+      case "instance-edit": {
+        if (!selectedClass) return
+        const saved = await updateClassInstance(selectedClass.id, submission.input)
+        onSaveClassInstance(saved)
+        break
+      }
+      case "series-edit": {
+        const updated = await updateClassSeries(submission.seriesId, submission.input)
+        onSaveClassSeries(submission.seriesId, updated)
+        break
+      }
+      default:
+        break
+    }
     setSelectedClass(null)
   }
 
@@ -467,6 +482,7 @@ function StudentProfileForm({
 
       <ClassEditDialog
         event={selectedEvent}
+        mode="edit"
         students={[student]}
         locations={locations}
         onOpenChange={(open) => {
