@@ -40,6 +40,7 @@ export interface ClassInstance {
   id: string
   studentId: string
   locationId: string
+  seriesId?: string | null
   type: ClassType
   startTime: Date
   endTime: Date

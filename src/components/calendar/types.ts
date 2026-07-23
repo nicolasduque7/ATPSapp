@@ -15,5 +15,6 @@ export interface CalendarClassEvent {
     locationName: string
     durationMinutes: number
     type: ClassType
+    seriesId?: string | null
   }
 }

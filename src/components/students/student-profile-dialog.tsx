@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react"
 import { format } from "date-fns"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Trash2 } from "lucide-react"
 
 import {
   Dialog,
@@ -21,6 +21,8 @@ import { ClassEditDialog } from "@/components/calendar/class-edit-dialog"
 import type { CalendarClassEvent } from "@/components/calendar/types"
 import { cn } from "@/lib/utils"
 import { getLocationColorStyle } from "@/lib/location-colors"
+import { updateClassInstance, deleteClassInstance, deleteClassSeries } from "@/lib/actions/classes"
+import type { StudentInput } from "@/lib/actions/students"
 import {
   STUDENT_LEVELS,
   getUpcomingClassesForStudent,
@@ -38,9 +40,10 @@ interface StudentProfileDialogProps {
   classes: ClassInstance[]
   locations: Location[]
   onOpenChange: (open: boolean) => void
-  onSave: (student: Student) => void
+  onSave: (input: StudentInput) => Promise<void>
+  onDelete: (studentId: string) => Promise<void>
   onSaveClass: (classInstance: ClassInstance) => void
-  onDeleteClass: (classId: string) => void
+  onDeleteClass: (target: { classId?: string; seriesId?: string }) => void
 }
 
 const GENDER_OPTIONS: Gender[] = ["Female", "Male"]
@@ -65,6 +68,7 @@ export function StudentProfileDialog({
   locations,
   onOpenChange,
   onSave,
+  onDelete,
   onSaveClass,
   onDeleteClass,
 }: StudentProfileDialogProps) {
@@ -79,10 +83,12 @@ export function StudentProfileDialog({
           <StudentProfileForm
             key={student.id}
             student={student}
+            mode={mode}
             classes={classes}
             locations={locations}
             onOpenChange={onOpenChange}
             onSave={onSave}
+            onDelete={onDelete}
             onSaveClass={onSaveClass}
             onDeleteClass={onDeleteClass}
           />
@@ -94,20 +100,24 @@ export function StudentProfileDialog({
 
 interface StudentProfileFormProps {
   student: Student
+  mode: "create" | "edit"
   classes: ClassInstance[]
   locations: Location[]
   onOpenChange: (open: boolean) => void
-  onSave: (student: Student) => void
+  onSave: (input: StudentInput) => Promise<void>
+  onDelete: (studentId: string) => Promise<void>
   onSaveClass: (classInstance: ClassInstance) => void
-  onDeleteClass: (classId: string) => void
+  onDeleteClass: (target: { classId?: string; seriesId?: string }) => void
 }
 
 function StudentProfileForm({
   student,
+  mode,
   classes,
   locations,
   onOpenChange,
   onSave,
+  onDelete,
   onSaveClass,
   onDeleteClass,
 }: StudentProfileFormProps) {
@@ -122,6 +132,10 @@ function StudentProfileForm({
   const [since, setSince] = useState(student.since)
   const [coachingNote, setCoachingNote] = useState(student.coachingNote ?? "")
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [selectedClass, setSelectedClass] = useState<ClassInstance | null>(null)
 
   const upcoming = useMemo(
@@ -146,11 +160,12 @@ function StudentProfileForm({
         locationName: location.name,
         durationMinutes: selectedClass.durationMinutes,
         type: selectedClass.type,
+        seriesId: selectedClass.seriesId,
       },
     }
   }, [selectedClass, locations, student.id, student.name, level])
 
-  function handleSubmit(formEvent: React.FormEvent) {
+  async function handleSubmit(formEvent: React.FormEvent) {
     formEvent.preventDefault()
 
     if (!name.trim()) {
@@ -158,19 +173,63 @@ function StudentProfileForm({
       return
     }
 
-    onSave({
-      ...student,
-      name: name.trim(),
-      nickname: nickname.trim() || undefined,
-      level,
-      age,
-      gender,
-      hand,
-      racketType: racketType.trim() || undefined,
-      since,
-      coachingNote: coachingNote.trim() || undefined,
+    setError(null)
+    setSaving(true)
+    try {
+      await onSave({
+        name: name.trim(),
+        nickname: nickname.trim() || undefined,
+        level,
+        age,
+        gender,
+        hand,
+        racketType: racketType.trim() || undefined,
+        since,
+        coachingNote: coachingNote.trim() || undefined,
+      })
+      onOpenChange(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Try again.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleConfirmDeleteStudent() {
+    setDeleteError(null)
+    setDeleting(true)
+    try {
+      await onDelete(student.id)
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete student. Try again.")
+      setDeleting(false)
+    }
+  }
+
+  async function handleSaveClass(updated: CalendarClassEvent) {
+    if (!selectedClass) return
+    const saved = await updateClassInstance(selectedClass.id, {
+      studentId: updated.resource.studentId,
+      locationId: updated.resource.locationId,
+      type: updated.resource.type,
+      startTime: updated.start,
+      endTime: updated.end,
+      durationMinutes: updated.resource.durationMinutes,
     })
-    onOpenChange(false)
+    onSaveClass(saved)
+    setSelectedClass(null)
+  }
+
+  async function handleDeleteClass(classId: string, options?: { deleteSeries?: boolean }) {
+    if (options?.deleteSeries && selectedClass?.seriesId) {
+      const seriesId = selectedClass.seriesId
+      await deleteClassSeries(seriesId)
+      onDeleteClass({ seriesId })
+    } else {
+      await deleteClassInstance(classId)
+      onDeleteClass({ classId })
+    }
+    setSelectedClass(null)
   }
 
   return (
@@ -302,13 +361,59 @@ function StudentProfileForm({
       </form>
 
       <DialogFooter>
-        <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+        <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit" form={formId} variant="positive">
-          Save
+        <Button type="submit" form={formId} variant="positive" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
         </Button>
       </DialogFooter>
+
+      {mode === "edit" && (
+        <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+          {confirmingDelete ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-foreground">
+                Delete {student.name}? This also deletes all of their scheduled and past classes.
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setConfirmingDelete(false)
+                    setDeleteError(null)
+                  }}
+                  disabled={deleting}
+                >
+                  Keep student
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleConfirmDeleteStudent}
+                  disabled={deleting}
+                >
+                  {deleting ? "Deleting…" : "Confirm delete"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="destructive"
+              className="w-full"
+              onClick={() => setConfirmingDelete(true)}
+            >
+              <Trash2 />
+              Delete student
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="mt-6 border-t border-border pt-5">
         <h3 className="font-heading text-base font-bold text-foreground">Upcoming classes</h3>
@@ -367,22 +472,8 @@ function StudentProfileForm({
         onOpenChange={(open) => {
           if (!open) setSelectedClass(null)
         }}
-        onSave={(updated) => {
-          if (!selectedClass) return
-          onSaveClass({
-            ...selectedClass,
-            locationId: updated.resource.locationId,
-            type: updated.resource.type,
-            startTime: updated.start,
-            endTime: updated.end,
-            durationMinutes: updated.resource.durationMinutes,
-          })
-          setSelectedClass(null)
-        }}
-        onDelete={(classId) => {
-          onDeleteClass(classId)
-          setSelectedClass(null)
-        }}
+        onSave={handleSaveClass}
+        onDelete={handleDeleteClass}
       />
     </>
   )

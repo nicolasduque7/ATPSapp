@@ -23,8 +23,8 @@ interface ClassEditDialogProps {
   students: Student[]
   locations: Location[]
   onOpenChange: (open: boolean) => void
-  onSave: (event: CalendarClassEvent) => void
-  onDelete: (eventId: string) => void
+  onSave: (event: CalendarClassEvent) => void | Promise<void>
+  onDelete: (eventId: string, options?: { deleteSeries?: boolean }) => void | Promise<void>
 }
 
 const CLASS_TYPES: ClassType[] = ["Private", "Group", "Match"]
@@ -108,8 +108,8 @@ interface ClassEditFormProps {
   students: Student[]
   locations: Location[]
   onOpenChange: (open: boolean) => void
-  onSave: (event: CalendarClassEvent) => void
-  onDelete: (eventId: string) => void
+  onSave: (event: CalendarClassEvent) => void | Promise<void>
+  onDelete: (eventId: string, options?: { deleteSeries?: boolean }) => void | Promise<void>
 }
 
 function ClassEditForm({ event, students, locations, onOpenChange, onSave, onDelete }: ClassEditFormProps) {
@@ -120,7 +120,12 @@ function ClassEditForm({ event, students, locations, onOpenChange, onSave, onDel
   const [startTime, setStartTime] = useState(() => toTimeInputValue(event.start))
   const [endTime, setEndTime] = useState(() => toTimeInputValue(event.end))
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const seriesId = event.resource.seriesId ?? null
 
   const today = useMemo(() => startOfDay(new Date()), [])
   const initialDateOffset = useMemo(
@@ -137,7 +142,7 @@ function ClassEditForm({ event, students, locations, onOpenChange, onSave, onDel
     return offsets
   }, [initialDateOffset])
 
-  function handleSubmit(formEvent: React.FormEvent) {
+  async function handleSubmit(formEvent: React.FormEvent) {
     formEvent.preventDefault()
 
     const student = students.find((s) => s.id === studentId)
@@ -153,22 +158,42 @@ function ClassEditForm({ event, students, locations, onOpenChange, onSave, onDel
       return
     }
 
-    onSave({
-      ...event,
-      title: student.name,
-      start,
-      end,
-      resource: {
-        studentId: student.id,
-        studentName: student.name,
-        level: student.level,
-        locationId: location.id,
-        locationName: location.name,
-        durationMinutes: Math.round((end.getTime() - start.getTime()) / 60_000),
-        type: classType,
-      },
-    })
-    onOpenChange(false)
+    setError(null)
+    setSaving(true)
+    try {
+      await onSave({
+        ...event,
+        title: student.name,
+        start,
+        end,
+        resource: {
+          studentId: student.id,
+          studentName: student.name,
+          level: student.level,
+          locationId: location.id,
+          locationName: location.name,
+          durationMinutes: Math.round((end.getTime() - start.getTime()) / 60_000),
+          type: classType,
+          seriesId: event.resource.seriesId,
+        },
+      })
+      onOpenChange(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Try again.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleConfirmDelete(deleteSeries: boolean) {
+    setDeleteError(null)
+    setDeleting(true)
+    try {
+      await onDelete(event.id, { deleteSeries })
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete class. Try again.")
+      setDeleting(false)
+    }
   }
 
   return (
@@ -310,30 +335,78 @@ function ClassEditForm({ event, students, locations, onOpenChange, onSave, onDel
       </form>
 
       <DialogFooter>
-        <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+        <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit" form={formId}>
-          Save
+        <Button type="submit" form={formId} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
         </Button>
       </DialogFooter>
 
-      <div className="mt-4 border-t border-border pt-4">
+      <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+        {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
         {confirmingDelete ? (
-          <div className="flex items-center gap-2">
-            <p className="flex-1 text-sm text-foreground">Delete this class?</p>
-            <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmingDelete(false)}>
-              Keep class
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => onDelete(event.id)}
-            >
-              Confirm delete
-            </Button>
-          </div>
+          seriesId ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-foreground">
+                This class is part of a recurring series. Delete just this class, or the whole series?
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="sm:flex-1"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={deleting}
+                >
+                  Keep class
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="sm:flex-1"
+                  onClick={() => handleConfirmDelete(false)}
+                  disabled={deleting}
+                >
+                  {deleting ? "Deleting…" : "Delete this class"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="sm:flex-1"
+                  onClick={() => handleConfirmDelete(true)}
+                  disabled={deleting}
+                >
+                  {deleting ? "Deleting…" : "Delete whole series"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <p className="flex-1 text-sm text-foreground">Delete this class?</p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deleting}
+              >
+                Keep class
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => handleConfirmDelete(false)}
+                disabled={deleting}
+              >
+                {deleting ? "Deleting…" : "Confirm delete"}
+              </Button>
+            </div>
+          )
         ) : (
           <Button
             type="button"

@@ -6,6 +6,7 @@ import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { LevelBadge } from "@/components/level-badge"
 import { StudentProfileDialog } from "@/components/students/student-profile-dialog"
+import { createStudent, deleteStudent, updateStudent, type StudentInput } from "@/lib/actions/students"
 import { STUDENT_LEVELS, type ClassInstance, type Location, type Student } from "@/lib/mock-data"
 
 interface StudentsViewProps {
@@ -14,16 +15,14 @@ interface StudentsViewProps {
   locations: Location[]
 }
 
-function createDraftStudent(): Student {
-  return {
-    id: `stu-${crypto.randomUUID()}`,
-    name: "",
-    level: STUDENT_LEVELS[0],
-    age: 10,
-    gender: "Female",
-    hand: "Right",
-    since: new Date(),
-  }
+const DRAFT_STUDENT: Student = {
+  id: "draft",
+  name: "",
+  level: STUDENT_LEVELS[0],
+  age: 10,
+  gender: "Female",
+  hand: "Right",
+  since: new Date(),
 }
 
 export function StudentsView({
@@ -38,7 +37,7 @@ export function StudentsView({
 
   function handleAddClick() {
     setMode("create")
-    setEditingStudent(createDraftStudent())
+    setEditingStudent(DRAFT_STUDENT)
   }
 
   function handleCardClick(student: Student) {
@@ -46,21 +45,33 @@ export function StudentsView({
     setEditingStudent(student)
   }
 
-  function handleSaveStudent(saved: Student) {
-    setStudents((prev) => {
-      const exists = prev.some((student) => student.id === saved.id)
-      return exists
-        ? prev.map((student) => (student.id === saved.id ? saved : student))
-        : [...prev, saved]
-    })
+  async function handleSaveStudent(input: StudentInput) {
+    if (mode === "create") {
+      const created = await createStudent(input)
+      setStudents((prev) => [...prev, created])
+    } else if (editingStudent) {
+      const saved = await updateStudent(editingStudent.id, input)
+      setStudents((prev) => prev.map((student) => (student.id === saved.id ? saved : student)))
+    }
+  }
+
+  async function handleDeleteStudent(studentId: string) {
+    await deleteStudent(studentId)
+    setStudents((prev) => prev.filter((student) => student.id !== studentId))
+    setClasses((prev) => prev.filter((c) => c.studentId !== studentId))
+    setEditingStudent(null)
   }
 
   function handleSaveClass(saved: ClassInstance) {
     setClasses((prev) => prev.map((c) => (c.id === saved.id ? saved : c)))
   }
 
-  function handleDeleteClass(classId: string) {
-    setClasses((prev) => prev.filter((c) => c.id !== classId))
+  function handleDeleteClass(target: { classId?: string; seriesId?: string }) {
+    setClasses((prev) =>
+      target.seriesId
+        ? prev.filter((c) => c.seriesId !== target.seriesId)
+        : prev.filter((c) => c.id !== target.classId)
+    )
   }
 
   return (
@@ -119,6 +130,7 @@ export function StudentsView({
           if (!open) setEditingStudent(null)
         }}
         onSave={handleSaveStudent}
+        onDelete={handleDeleteStudent}
         onSaveClass={handleSaveClass}
         onDeleteClass={handleDeleteClass}
       />
