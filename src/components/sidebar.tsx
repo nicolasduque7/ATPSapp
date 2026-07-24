@@ -1,4 +1,4 @@
-import { CalendarDays, Home, MapPin, Users } from "lucide-react"
+import { CalendarDays, Home, MapPin, Settings, Users } from "lucide-react"
 
 import { NavItem } from "@/components/nav-item"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -12,6 +12,7 @@ const navItems = [
   { href: "/calendar", icon: <CalendarDays className={iconClassName} />, label: "Calendar" },
   { href: "/locations", icon: <MapPin className={iconClassName} />, label: "Locations" },
   { href: "/students", icon: <Users className={iconClassName} />, label: "Students" },
+  { href: "/settings", icon: <Settings className={iconClassName} />, label: "Settings" },
 ]
 
 export async function Sidebar(): Promise<React.JSX.Element> {

@@ -9,7 +9,6 @@ export type Hand = "Right" | "Left"
 export interface Coach {
   id: string
   name: string
-  email: string
 }
 
 export type CourtSurface = "Hard" | "Clay" | "Both"
@@ -40,6 +39,7 @@ export interface Student {
 
 export interface ClassInstance {
   id: string
+  coachId: string
   studentId: string
   locationId: string
   seriesId?: string | null
@@ -49,6 +49,15 @@ export interface ClassInstance {
   durationMinutes: number
   completed: boolean
   notes?: string
+}
+
+export interface AvailabilityBlock {
+  id: string
+  coachId: string
+  seriesId?: string | null
+  locationIds: string[]
+  startTime: Date
+  endTime: Date
 }
 
 export function getUpcomingClassesForStudent(

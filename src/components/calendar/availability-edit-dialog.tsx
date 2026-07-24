@@ -15,10 +15,8 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { getLocationColorStyle } from "@/lib/location-colors"
-import { addDays, addMinutes, combineDateAndTime, type SeriesFrequency } from "@/lib/dates"
-import { getClassSeriesMeta } from "@/lib/actions/classes"
-import type { ClassType, Location, Student } from "@/lib/mock-data"
-import type { CalendarClassEvent, ClassFormSubmission } from "@/components/calendar/types"
+import { addDays, combineDateAndTime, type SeriesFrequency } from "@/lib/dates"
+import { getAvailabilitySeriesMeta } from "@/lib/actions/availability"
 import {
   DAY_OF_MONTH_OPTIONS,
   DateOffsetField,
@@ -34,79 +32,46 @@ import {
   pluralUnit,
   toTimeInputValue,
 } from "@/components/calendar/recurrence-fields"
+import type { Location } from "@/lib/mock-data"
+import type { AvailabilityDialogTarget, AvailabilityFormSubmission } from "@/components/calendar/types"
 
-interface ClassEditDialogProps {
-  event: CalendarClassEvent | null
-  mode: "create" | "edit"
-  students: Student[]
+interface AvailabilityEditDialogProps {
+  target: AvailabilityDialogTarget | null
   locations: Location[]
   onOpenChange: (open: boolean) => void
-  onSave: (submission: ClassFormSubmission) => Promise<void>
-  onDelete?: (eventId: string, options?: { deleteSeries?: boolean }) => Promise<void>
+  onSave: (submission: AvailabilityFormSubmission) => Promise<void>
+  onDelete?: (target: { kind: "block" | "series"; id: string }) => Promise<void>
 }
-
-const CLASS_TYPES: ClassType[] = ["Private", "Group", "Match"]
 
 const DATE_RANGE_BEFORE = 14
 const DATE_RANGE_AFTER = 90
 const SERIES_RANGE_AFTER = 180
 const DEFAULT_SERIES_LENGTH_DAYS = 56
 
-function durationBetween(startTime: string, endTime: string, today: Date): number {
-  const start = combineDateAndTime(today, startTime)
-  const end = combineDateAndTime(today, endTime)
-  return Math.round((end.getTime() - start.getTime()) / 60_000)
+function targetKey(target: AvailabilityDialogTarget): string {
+  if (target.kind === "block") return `block-${target.block.id}`
+  if (target.kind === "series") return `series-${target.series.id}`
+  return "create"
 }
 
-export function createDraftEvent(): CalendarClassEvent {
-  const now = new Date()
-  const start = new Date(now)
-  start.setMinutes(start.getMinutes() < 30 ? 30 : 0, 0, 0)
-  if (start.getMinutes() === 0) start.setHours(start.getHours() + 1)
-  const end = addMinutes(start, 60)
-
-  return {
-    id: "draft",
-    title: "",
-    start,
-    end,
-    resource: {
-      coachId: "",
-      coachName: "",
-      studentId: "",
-      studentName: "",
-      level: "1ra",
-      locationId: "",
-      locationName: "",
-      durationMinutes: 60,
-      type: "Private",
-      seriesId: null,
-    },
-  }
-}
-
-export function ClassEditDialog({
-  event,
-  mode,
-  students,
+export function AvailabilityEditDialog({
+  target,
   locations,
   onOpenChange,
   onSave,
   onDelete,
-}: ClassEditDialogProps) {
+}: AvailabilityEditDialogProps) {
   return (
-    <Dialog open={!!event} onOpenChange={onOpenChange}>
+    <Dialog open={!!target} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? "Add class" : "Edit class"}</DialogTitle>
+          <DialogTitle>{target?.kind === "create" ? "Add working hours" : "Edit working hours"}</DialogTitle>
         </DialogHeader>
 
-        {event && (
-          <ClassEditForm
-            key={event.id}
-            event={event}
-            mode={mode}
-            students={students}
+        {target && (
+          <AvailabilityEditForm
+            key={targetKey(target)}
+            target={target}
             locations={locations}
             onOpenChange={onOpenChange}
             onSave={onSave}
@@ -118,84 +83,91 @@ export function ClassEditDialog({
   )
 }
 
-interface ClassEditFormProps {
-  event: CalendarClassEvent
-  mode: "create" | "edit"
-  students: Student[]
+interface AvailabilityEditFormProps {
+  target: AvailabilityDialogTarget
   locations: Location[]
   onOpenChange: (open: boolean) => void
-  onSave: (submission: ClassFormSubmission) => Promise<void>
-  onDelete?: (eventId: string, options?: { deleteSeries?: boolean }) => Promise<void>
+  onSave: (submission: AvailabilityFormSubmission) => Promise<void>
+  onDelete?: (target: { kind: "block" | "series"; id: string }) => Promise<void>
 }
 
-function ClassEditForm({
-  event,
-  mode,
-  students,
-  locations,
-  onOpenChange,
-  onSave,
-  onDelete,
-}: ClassEditFormProps) {
+function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelete }: AvailabilityEditFormProps) {
   const formId = useId()
-  const [studentId, setStudentId] = useState<string | null>(
-    mode === "create" ? null : event.resource.studentId
-  )
-  const [locationId, setLocationId] = useState<string | null>(
-    mode === "create" ? null : event.resource.locationId
-  )
-  const [classType, setClassType] = useState<ClassType | null>(
-    mode === "create" ? null : event.resource.type
-  )
+  const isBlockEdit = target.kind === "block"
+  const isSeriesEdit = target.kind === "series"
+  // A materialized block clicked on the Calendar may belong to a recurring
+  // series — in that case (unlike a genuine one-off block) the coach gets
+  // the same "this occurrence / whole series" choice classes already offer.
+  const blockSeriesId = target.kind === "block" ? (target.block.seriesId ?? null) : null
+  const isBlockPartOfSeries = isBlockEdit && !!blockSeriesId
+
+  const [locationIds, setLocationIds] = useState<string[]>(() => {
+    if (target.kind === "block") return target.block.locationIds
+    if (target.kind === "series") return target.series.locationIds
+    return []
+  })
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  const seriesId = event.resource.seriesId ?? null
-  const isSeriesInstance = mode === "edit" && !!seriesId
-
   const [bookingKind, setBookingKind] = useState<"one-off" | "recurring">("one-off")
   const [editScope, setEditScope] = useState<"instance" | "series">("instance")
   const usingRecurringFields =
-    (mode === "create" && bookingKind === "recurring") ||
-    (mode === "edit" && isSeriesInstance && editScope === "series")
+    isSeriesEdit ||
+    (target.kind === "create" && bookingKind === "recurring") ||
+    (isBlockPartOfSeries && editScope === "series")
 
   const today = useMemo(() => startOfDay(new Date()), [])
-  const initialDateOffset = useMemo(
-    () => differenceInCalendarDays(startOfDay(event.start), today),
-    [event.start, today]
+
+  const initialDateOffset =
+    target.kind === "block" ? differenceInCalendarDays(startOfDay(target.block.startTime), today) : 0
+
+  // One-off fields: create-as-one-off, editing a one-off block, or editing
+  // just "this occurrence" of a series-linked block.
+  const [dateOffset, setDateOffset] = useState(initialDateOffset)
+  const [singleStartTime, setSingleStartTime] = useState(() =>
+    target.kind === "block" ? toTimeInputValue(target.block.startTime) : "13:00"
+  )
+  const [singleEndTime, setSingleEndTime] = useState(() =>
+    target.kind === "block" ? toTimeInputValue(target.block.endTime) : "17:00"
   )
 
-  // Single-date fields: one-off create, or editing just this instance.
-  const [dateOffset, setDateOffset] = useState(initialDateOffset)
-  const [singleStartTime, setSingleStartTime] = useState(() => toTimeInputValue(event.start))
-  const [singleEndTime, setSingleEndTime] = useState(() => toTimeInputValue(event.end))
-
-  // Recurring-pattern fields: creating a series, or editing the whole series.
-  const [recurringStartOffset, setRecurringStartOffset] = useState(initialDateOffset)
-  const [frequency, setFrequency] = useState<SeriesFrequency>("Weekly")
-  const [intervalCount, setIntervalCount] = useState(1)
-  const [recurringWeekdays, setRecurringWeekdays] = useState<number[]>([])
-  const [dayOfMonth, setDayOfMonth] = useState(1)
-  const [recurringStartTime, setRecurringStartTime] = useState(() => toTimeInputValue(event.start))
-  const [recurringEndTime, setRecurringEndTime] = useState(() => toTimeInputValue(event.end))
+  // Recurring-pattern fields: creating a series, editing an existing one
+  // directly (Settings), or editing "whole series" from a clicked block
+  // (Calendar) — the latter is populated by the lazy fetch below.
+  const [recurringStartOffset, setRecurringStartOffset] = useState(
+    target.kind === "series" ? differenceInCalendarDays(startOfDay(target.series.startDate), today) : 0
+  )
+  const [frequency, setFrequency] = useState<SeriesFrequency>(
+    target.kind === "series" ? target.series.frequency : "Weekly"
+  )
+  const [intervalCount, setIntervalCount] = useState(target.kind === "series" ? target.series.intervalCount : 1)
+  const [recurringWeekdays, setRecurringWeekdays] = useState<number[]>(
+    target.kind === "series" ? (target.series.weekdays ?? []) : []
+  )
+  const [dayOfMonth, setDayOfMonth] = useState(target.kind === "series" ? (target.series.dayOfMonth ?? 1) : 1)
+  const [recurringStartTime, setRecurringStartTime] = useState(
+    target.kind === "series" ? target.series.startTime : "13:00"
+  )
+  const [recurringEndTime, setRecurringEndTime] = useState(
+    target.kind === "series" ? target.series.endTime : "17:00"
+  )
   const [recurringUntilOffset, setRecurringUntilOffset] = useState(
-    initialDateOffset + DEFAULT_SERIES_LENGTH_DAYS
+    target.kind === "series"
+      ? differenceInCalendarDays(target.series.endDate, today)
+      : DEFAULT_SERIES_LENGTH_DAYS
   )
 
   const [seriesMetaLoaded, setSeriesMetaLoaded] = useState(false)
   const [seriesMetaError, setSeriesMetaError] = useState<string | null>(null)
-  const seriesMetaLoading =
-    mode === "edit" && isSeriesInstance && editScope === "series" && !seriesMetaLoaded && !seriesMetaError
+  const seriesMetaLoading = isBlockPartOfSeries && editScope === "series" && !seriesMetaLoaded && !seriesMetaError
 
   useEffect(() => {
-    if (!(mode === "edit" && isSeriesInstance && editScope === "series" && seriesId) || seriesMetaLoaded) {
-      return
-    }
+    if (!(isBlockPartOfSeries && editScope === "series" && blockSeriesId) || seriesMetaLoaded) return
     let cancelled = false
-    getClassSeriesMeta(seriesId)
+    getAvailabilitySeriesMeta(blockSeriesId)
       .then((meta) => {
         if (cancelled) return
         setFrequency(meta.frequency)
@@ -203,8 +175,8 @@ function ClassEditForm({
         setRecurringWeekdays(meta.weekdays ?? [])
         setDayOfMonth(meta.dayOfMonth ?? 1)
         setRecurringStartTime(meta.startTime)
-        const start = combineDateAndTime(today, meta.startTime)
-        setRecurringEndTime(toTimeInputValue(addMinutes(start, meta.durationMinutes)))
+        setRecurringEndTime(meta.endTime)
+        setLocationIds(meta.locationIds)
         setRecurringUntilOffset(differenceInCalendarDays(meta.endDate, today))
         setSeriesMetaLoaded(true)
       })
@@ -216,7 +188,7 @@ function ClassEditForm({
     return () => {
       cancelled = true
     }
-  }, [mode, isSeriesInstance, editScope, seriesId, seriesMetaLoaded, today])
+  }, [isBlockPartOfSeries, editScope, blockSeriesId, seriesMetaLoaded, today])
 
   const dateOptions = useMemo(
     () => buildOffsetRange(-DATE_RANGE_BEFORE, DATE_RANGE_AFTER, initialDateOffset),
@@ -227,6 +199,12 @@ function ClassEditForm({
     [recurringStartOffset, recurringUntilOffset]
   )
 
+  function toggleLocation(locationId: string) {
+    setLocationIds((prev) =>
+      prev.includes(locationId) ? prev.filter((id) => id !== locationId) : [...prev, locationId]
+    )
+  }
+
   function toggleRecurringWeekday(day: number) {
     setRecurringWeekdays((prev) =>
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)
@@ -236,21 +214,17 @@ function ClassEditForm({
   async function handleSubmit(formEvent: React.FormEvent) {
     formEvent.preventDefault()
 
-    if (!studentId || !locationId || !classType) {
-      setError("Select a student, location, and type.")
+    if (locationIds.length === 0) {
+      setError("Select at least one location.")
       return
     }
-
-    const student = students.find((s) => s.id === studentId)
-    const location = locations.find((l) => l.id === locationId)
-    if (!student || !location) return
 
     if (usingRecurringFields) {
       if (recurringEndTime <= recurringStartTime) {
         setError("End time must be after the start time.")
         return
       }
-      const untilBound = mode === "create" ? recurringStartOffset : 0
+      const untilBound = target.kind === "create" ? recurringStartOffset : 0
       if (recurringUntilOffset < untilBound) {
         setError("Until date must be on or after the start date.")
         return
@@ -259,67 +233,57 @@ function ClassEditForm({
         setError("Select at least one day of the week.")
         return
       }
-    } else {
-      if (singleEndTime <= singleStartTime) {
-        setError("End time must be after the start time.")
-        return
-      }
+    } else if (singleEndTime <= singleStartTime) {
+      setError("End time must be after the start time.")
+      return
     }
 
     setError(null)
     setSaving(true)
     try {
       if (usingRecurringFields) {
-        const durationMinutes = durationBetween(recurringStartTime, recurringEndTime, today)
         const weekdays = frequency === "Weekly" ? recurringWeekdays : null
         const dayOfMonthValue = frequency === "Monthly" ? dayOfMonth : null
-        if (mode === "create") {
+        if (target.kind === "create") {
           await onSave({
             kind: "series-create",
             input: {
-              studentId: student.id,
-              locationId: location.id,
-              type: classType,
+              locationIds,
               frequency,
               intervalCount,
               weekdays,
               dayOfMonth: dayOfMonthValue,
               startDate: addDays(today, recurringStartOffset),
               startTime: recurringStartTime,
-              durationMinutes,
+              endTime: recurringEndTime,
               endDate: addDays(today, recurringUntilOffset),
             },
           })
-        } else if (seriesId) {
+        } else {
+          const seriesId = target.kind === "series" ? target.series.id : blockSeriesId
+          if (!seriesId) return
           await onSave({
             kind: "series-edit",
             seriesId,
             input: {
-              studentId: student.id,
-              locationId: location.id,
-              type: classType,
+              locationIds,
               intervalCount,
               weekdays,
               dayOfMonth: dayOfMonthValue,
               startTime: recurringStartTime,
-              durationMinutes,
+              endTime: recurringEndTime,
               endDate: addDays(today, recurringUntilOffset),
             },
           })
         }
       } else {
         const day = addDays(today, dateOffset)
-        const start = combineDateAndTime(day, singleStartTime)
-        const end = combineDateAndTime(day, singleEndTime)
         const input = {
-          studentId: student.id,
-          locationId: location.id,
-          type: classType,
-          startTime: start,
-          endTime: end,
-          durationMinutes: Math.round((end.getTime() - start.getTime()) / 60_000),
+          locationIds,
+          startTime: combineDateAndTime(day, singleStartTime),
+          endTime: combineDateAndTime(day, singleEndTime),
         }
-        await onSave(mode === "create" ? { kind: "one-off", input } : { kind: "instance-edit", input })
+        await onSave(target.kind === "block" ? { kind: "one-off-edit", input } : { kind: "one-off-create", input })
       }
       onOpenChange(false)
     } catch (err) {
@@ -329,14 +293,22 @@ function ClassEditForm({
     }
   }
 
-  async function handleConfirmDelete(deleteSeries: boolean) {
+  async function handleConfirmDelete(deleteWholeSeries: boolean) {
     if (!onDelete) return
     setDeleteError(null)
     setDeleting(true)
     try {
-      await onDelete(event.id, { deleteSeries })
+      if (target.kind === "series") {
+        await onDelete({ kind: "series", id: target.series.id })
+      } else if (target.kind === "block") {
+        if (deleteWholeSeries && target.block.seriesId) {
+          await onDelete({ kind: "series", id: target.block.seriesId })
+        } else {
+          await onDelete({ kind: "block", id: target.block.id })
+        }
+      }
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Couldn't delete class. Try again.")
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete. Try again.")
       setDeleting(false)
     }
   }
@@ -345,42 +317,17 @@ function ClassEditForm({
     <>
       <form id={formId} onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={`${formId}-student`} className="text-xs font-medium text-muted-foreground">
-            Student
-          </label>
-          <Select value={studentId} onValueChange={(value) => setStudentId(value as string)}>
-            <SelectTrigger id={`${formId}-student`}>
-              <SelectValue>
-                {(value: string | null) => {
-                  const s = students.find((student) => student.id === value)
-                  if (!s) return <span className="text-muted-foreground">Select a student</span>
-                  return `${s.name} · ${s.level}`
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {students.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name} · {s.level}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Location</span>
-          <div role="radiogroup" aria-label="Location" className="flex flex-wrap gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Locations</span>
+          <div role="group" aria-label="Locations" className="flex flex-wrap gap-2">
             {locations.map((location) => {
               const style = getLocationColorStyle(location.id, locations)
-              const selected = location.id === locationId
+              const selected = locationIds.includes(location.id)
               return (
                 <button
                   key={location.id}
                   type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() => setLocationId(location.id)}
+                  aria-pressed={selected}
+                  onClick={() => toggleLocation(location.id)}
                   className={cn(
                     "inline-flex cursor-pointer items-center gap-2 rounded-full border-2 px-3 py-1.5 text-sm font-medium transition-all duration-200 motion-reduce:transition-none",
                     selected
@@ -396,45 +343,22 @@ function ClassEditForm({
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Type</span>
-          <div role="radiogroup" aria-label="Type" className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1">
-            {CLASS_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="radio"
-                aria-checked={classType === t}
-                onClick={() => setClassType(t)}
-                className={cn(
-                  "cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none",
-                  classType === t
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {mode === "create" && (
+        {target.kind === "create" && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Booking type</span>
+            <span className="text-xs font-medium text-muted-foreground">Type</span>
             <SegmentedToggle
-              ariaLabel="Booking type"
+              ariaLabel="Type"
               value={bookingKind}
               onChange={setBookingKind}
               options={[
                 { value: "one-off", label: "One-off" },
-                { value: "recurring", label: "Recurring" },
+                { value: "recurring", label: "Recurring cadence" },
               ]}
             />
           </div>
         )}
 
-        {mode === "edit" && isSeriesInstance && (
+        {isBlockPartOfSeries && (
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Applies to</span>
             <SegmentedToggle
@@ -442,7 +366,7 @@ function ClassEditForm({
               value={editScope}
               onChange={setEditScope}
               options={[
-                { value: "instance", label: "This class" },
+                { value: "instance", label: "This block" },
                 { value: "series", label: "Whole series" },
               ]}
             />
@@ -476,14 +400,14 @@ function ClassEditForm({
           </>
         )}
 
-        {usingRecurringFields && mode === "edit" && seriesMetaLoading && (
+        {usingRecurringFields && isBlockEdit && seriesMetaLoading && (
           <p className="text-sm text-muted-foreground">Loading series details…</p>
         )}
         {seriesMetaError && <p className="text-sm text-destructive">{seriesMetaError}</p>}
 
-        {usingRecurringFields && !(mode === "edit" && seriesMetaLoading) && (
+        {usingRecurringFields && !(isBlockEdit && seriesMetaLoading) && (
           <>
-            {mode === "create" && (
+            {target.kind === "create" && (
               <DateOffsetField
                 id={`${formId}-starts`}
                 label="Starts"
@@ -495,7 +419,7 @@ function ClassEditForm({
             )}
 
             <div className="grid grid-cols-2 gap-4">
-              {mode === "create" ? (
+              {target.kind === "create" ? (
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor={`${formId}-frequency`}
@@ -643,14 +567,14 @@ function ClassEditForm({
         </Button>
       </DialogFooter>
 
-      {mode === "edit" && (
+      {(isBlockEdit || isSeriesEdit) && (
         <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
           {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           {confirmingDelete ? (
-            seriesId ? (
+            isBlockPartOfSeries ? (
               <div className="flex flex-col gap-2">
                 <p className="text-sm text-foreground">
-                  This class is part of a recurring series. Delete just this class, or the whole series?
+                  This is part of a recurring rule. Delete just this block, or the whole rule?
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
@@ -661,7 +585,7 @@ function ClassEditForm({
                     onClick={() => setConfirmingDelete(false)}
                     disabled={deleting}
                   >
-                    Keep class
+                    Keep
                   </Button>
                   <Button
                     type="button"
@@ -671,7 +595,7 @@ function ClassEditForm({
                     onClick={() => handleConfirmDelete(false)}
                     disabled={deleting}
                   >
-                    {deleting ? "Deleting…" : "Delete this class"}
+                    {deleting ? "Deleting…" : "Delete this block"}
                   </Button>
                   <Button
                     type="button"
@@ -681,13 +605,15 @@ function ClassEditForm({
                     onClick={() => handleConfirmDelete(true)}
                     disabled={deleting}
                   >
-                    {deleting ? "Deleting…" : "Delete whole series"}
+                    {deleting ? "Deleting…" : "Delete whole rule"}
                   </Button>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <p className="flex-1 text-sm text-foreground">Delete this class?</p>
+                <p className="flex-1 text-sm text-foreground">
+                  {isSeriesEdit ? "Delete this whole recurring rule?" : "Delete this working-hours block?"}
+                </p>
                 <Button
                   type="button"
                   variant="secondary"
@@ -695,7 +621,7 @@ function ClassEditForm({
                   onClick={() => setConfirmingDelete(false)}
                   disabled={deleting}
                 >
-                  Keep class
+                  Keep
                 </Button>
                 <Button
                   type="button"
@@ -716,7 +642,7 @@ function ClassEditForm({
               onClick={() => setConfirmingDelete(true)}
             >
               <Trash2 />
-              Delete class
+              {isSeriesEdit ? "Delete recurring rule" : "Delete working hours"}
             </Button>
           )}
         </div>

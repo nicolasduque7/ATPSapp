@@ -169,6 +169,8 @@ function StudentProfileForm({
       start: selectedClass.startTime,
       end: selectedClass.endTime,
       resource: {
+        coachId: selectedClass.coachId,
+        coachName: "",
         studentId: student.id,
         studentName: student.name,
         level,

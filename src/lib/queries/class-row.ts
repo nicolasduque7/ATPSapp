@@ -1,10 +1,11 @@
 import type { ClassInstance, ClassType } from "@/lib/mock-data";
 
 export const CLASS_COLUMNS =
-  "id, student_id, location_id, series_id, class_type, start_time, end_time, duration_minutes, notes" as const;
+  "id, coach_id, student_id, location_id, series_id, class_type, start_time, end_time, duration_minutes, notes" as const;
 
 export interface ClassRow {
   id: string;
+  coach_id: string;
   student_id: string;
   location_id: string;
   series_id: string | null;
@@ -18,6 +19,7 @@ export interface ClassRow {
 export function mapClassRow(row: ClassRow, completed = false): ClassInstance {
   return {
     id: row.id,
+    coachId: row.coach_id,
     studentId: row.student_id,
     locationId: row.location_id,
     seriesId: row.series_id,

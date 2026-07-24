@@ -114,6 +114,40 @@
   display: none;
 }
 
+/* Another coach's booked class: same tile shape, tinted with that coach's
+   color (set inline as --event-accent) instead of the default primary. */
+.courtside-calendar .rbc-event.courtside-other-coach-event {
+  background-color: color-mix(in oklch, var(--event-accent) 14%, transparent);
+  border-left-color: var(--event-accent);
+}
+
+.courtside-calendar .rbc-event.courtside-other-coach-event:hover {
+  background-color: color-mix(in oklch, var(--event-accent) 20%, transparent);
+}
+
+/* A coach's declared working hours: a lower-emphasis, dashed layer so it
+   reads as "available", not as an actual booking — even when its color
+   happens to match a real class tile. */
+.courtside-calendar .rbc-event.courtside-availability-event {
+  background-color: color-mix(in oklch, var(--event-accent) 8%, transparent);
+  border: 1px dashed var(--event-accent);
+  border-left: 1px dashed var(--event-accent);
+}
+
+.courtside-calendar .rbc-event.courtside-availability-event:hover {
+  background-color: color-mix(in oklch, var(--event-accent) 14%, transparent);
+}
+
+.courtside-calendar .rbc-day-slot .rbc-event.courtside-other-coach-event,
+.courtside-calendar .rbc-day-slot .rbc-background-event.courtside-other-coach-event {
+  border-left: 3px solid var(--event-accent);
+}
+
+.courtside-calendar .rbc-day-slot .rbc-event.courtside-availability-event,
+.courtside-calendar .rbc-day-slot .rbc-background-event.courtside-availability-event {
+  border-left: 1px dashed var(--event-accent);
+}
+
 /* "+N more" popover trigger and the popover itself */
 .courtside-calendar .rbc-show-more {
   background-color: transparent;

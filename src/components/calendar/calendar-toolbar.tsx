@@ -3,8 +3,7 @@ import { Navigate, type ToolbarProps, type View } from "react-big-calendar"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import type { CalendarClassEvent } from "@/components/calendar/types"
-import type { CalendarViewKey } from "@/components/calendar/types"
+import type { CalendarEvent, CalendarViewKey } from "@/components/calendar/types"
 
 const VIEW_OPTIONS: { key: CalendarViewKey; label: string }[] = [
   { key: "month", label: "Month" },
@@ -18,7 +17,7 @@ export function CalendarToolbar({
   view,
   onNavigate,
   onView,
-}: ToolbarProps<CalendarClassEvent>) {
+}: ToolbarProps<CalendarEvent>) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
       <div className="flex items-center gap-2">

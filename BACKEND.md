@@ -196,14 +196,89 @@ groundwork for that future work, verified directly against the database.
 
 ---
 
+## 6. Cross-coach calendar visibility
+
+A coach can now optionally see *other* coaches' booked classes and declared
+working hours on their own Calendar — gated behind two independent toggles,
+each opening a per-coach checklist (nothing shows by default beyond a
+coach's own classes).
+
+**The RLS change that makes this possible:** `classes`'s select policy was
+changed from `coach_id = auth.uid()` to just `is_coach()` — any coach can now
+*read* every class, club-wide. Insert/update/delete stay exactly as
+coach-private as before (`is_coach() and coach_id = auth.uid()`), so a coach
+can see but never edit another coach's booking. `class_series` was
+deliberately left untouched (still fully coach-private) — no UI needs
+another coach's recurrence rule, only the materialized instances, which
+already carry `series_id`.
+
+**Why two separate query functions exist for `classes`:** because the select
+policy is now shared, `src/lib/queries/classes.ts` has both
+`getAllClasses()` (explicitly filtered to `coach_id = <caller>`, used by the
+Home dashboard and the Students page — pages that were never meant to show
+cross-coach data) and `getAllClassesAllCoaches()` (unfiltered, used only by
+the Calendar page). Relying on RLS alone here would have silently made Home
+and Students cross-coach too — the explicit filter is a deliberate,
+defense-in-depth choice, not a leftover.
+
+**Coach display names:** `profiles` gained a `display_name` column
+(populated from `auth.users.raw_user_meta_data->>'full_name'` at signup, via
+the same `handle_new_user()` trigger from section 4), plus a new shared
+select policy, `profiles_select_coach_directory`, letting any coach read the
+roster of other coaches' names — needed to label events with whose they
+are. Not exposed to students yet.
+
+**Front-end connection:** `src/app/(app)/calendar/page.tsx` +
+`src/components/calendar/class-calendar.tsx` — the toggle bar, per-coach
+checklists, and color-coding (`src/lib/coach-colors.ts`) all live here.
+
+## 7. Coach working hours (`coach_availability_series` / `coach_availability_blocks`)
+
+A coach can declare when — and at which locations — they're generally
+available to teach, from a new Settings page. This is purely descriptive:
+there's no validation tying a class booking to a coach's declared hours, and
+no exclusion constraint preventing a coach's own working-hours entries from
+overlapping each other (e.g. a one-off adjustment layered over a standing
+recurring block is valid, not an error).
+
+**Structurally this is a direct mirror of `class_series`/`classes`:**
+`coach_availability_series` holds the recurrence rule (Daily/Weekly/Monthly,
+"every N", weekdays or day-of-month, a required `end_date` — same
+`frequency_fields_consistent`-shaped CHECK constraint as `class_series`);
+`coach_availability_blocks` holds the materialized instances, generated
+entirely up front at creation time using the exact same
+`generateOccurrences()` function from `src/lib/dates.ts` that class series
+already use. `series_id` is null for one-off blocks. Editing "whole series"
+regenerates only future (not-yet-started) blocks and leaves past ones alone,
+identical in shape to `updateClassSeries`.
+
+One difference from `class_series`: a working-hours entry can cover
+**multiple locations at once** (`location_ids uuid[]`, at least one
+required), so a coach can say "available at Court A or B, Mon–Wed 1–5pm" as
+a single entry rather than one per court.
+
+**RLS:** select is shared club-wide (`is_coach()`, no `coach_id` filter) on
+both tables, same reasoning as classes above; insert/update/delete stay
+scoped to `is_coach() and coach_id = auth.uid()`.
+
+**Front-end connection:** `src/app/(app)/settings/page.tsx` (the coach's own
+management view, via `getCoachAvailabilityBlocks()` — explicitly filtered to
+`coach_id`, same defense-in-depth reasoning as section 6) and
+`src/lib/actions/availability.ts` for create/update/delete. The Calendar
+reads everyone's blocks via `getAllAvailabilityBlocks()` for its "Working
+hours" toggle layer.
+
+---
+
 ## Known gaps / deliberately deferred
 
 These are documented so nobody re-discovers them as "surprises" later:
 
 - **No student Dashboard or Calendar UI yet.** `/student` is a placeholder.
-- **No cross-coach calendar visibility for coaches**, even though the
-  student-read policy above already supports it under the hood. A coach
-  still only ever sees their own booked classes.
+- **No student-facing cross-coach visibility.** Coaches can now see other
+  coaches' classes and working hours (section 6); a student cannot see any
+  of this yet — that's the next planned phase, and the RLS/query/type shapes
+  above were built to be reused by it directly.
 - **"Open Class" (letting other students join a class) isn't built.**
   `classes` today is strictly one row per student — there's no table for
   "multiple students in one class" yet. Building it will also require
