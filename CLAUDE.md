@@ -25,6 +25,15 @@ Pages: Home (dashboard), Calendar, Locations, Students.
 - `src/lib/` — supabase client, queries, types, helpers
 - `.claude/skills/` — project skills
 
+## Backend documentation
+- `BACKEND.md` (repo root) is the single source of truth for backend
+  decisions — schema, RLS policies, roles/auth, and how each connects to the
+  frontend — written in plain English.
+- Any change to a backend decision (new table, new RLS policy, new role,
+  new server-side rule, new migration that changes behavior — not just
+  routine CRUD) MUST update `BACKEND.md` in the same change. Treat it like
+  `PROJECT.md`: read before planning backend work, update after building it.
+
 ## Conventions
 - TypeScript strict; explicit return types on exported functions.
 - Styling ONLY via Tailwind + shadcn; no inline hex colors — use theme tokens.

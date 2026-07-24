@@ -28,6 +28,7 @@ import {
   deleteClassSeries,
 } from "@/lib/actions/classes"
 import type { StudentInput } from "@/lib/actions/students"
+import { inviteStudent } from "@/lib/actions/invites"
 import {
   STUDENT_LEVELS,
   getUpcomingClassesForStudent,
@@ -386,6 +387,19 @@ function StudentProfileForm({
 
       {mode === "edit" && (
         <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+          <span className="text-xs font-medium text-muted-foreground">Student login</span>
+          {student.linked ? (
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-positive/10 px-2.5 py-1 text-xs font-medium text-positive">
+              Linked
+            </span>
+          ) : (
+            <StudentInviteControl studentId={student.id} initialEmail={student.email ?? ""} />
+          )}
+        </div>
+      )}
+
+      {mode === "edit" && (
+        <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
           {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           {confirmingDelete ? (
             <div className="flex flex-col gap-2">
@@ -494,6 +508,67 @@ function StudentProfileForm({
         onDelete={handleDeleteClass}
       />
     </>
+  )
+}
+
+function StudentInviteControl({ studentId, initialEmail }: { studentId: string; initialEmail: string }) {
+  const [email, setEmail] = useState(initialEmail)
+  const [link, setLink] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function handleInvite() {
+    setError(null)
+    setSending(true)
+    setCopied(false)
+    try {
+      const inviteLink = await inviteStudent(studentId, email)
+      setLink(inviteLink)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't create the invite. Try again.")
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleCopy() {
+    if (!link) return
+    await navigator.clipboard.writeText(link)
+    setCopied(true)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <Input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="student@example.com"
+          aria-label="Student email"
+          className="h-9"
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={handleInvite}
+          disabled={sending || !email.trim()}
+        >
+          {sending ? "Inviting…" : "Invite"}
+        </Button>
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {link && (
+        <div className="flex items-center gap-2 rounded-2xl bg-muted p-3">
+          <span className="flex-1 truncate text-xs text-muted-foreground">{link}</span>
+          <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 

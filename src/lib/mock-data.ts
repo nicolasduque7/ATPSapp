@@ -34,6 +34,8 @@ export interface Student {
   racketType?: string
   since: Date
   coachingNote?: string
+  email?: string
+  linked: boolean
 }
 
 export interface ClassInstance {

@@ -13,7 +13,12 @@ Help tennis coaches schedule classes and manage sessions.
   Level Security on the classes/class_series tables. Locations and students
   use open Row Level Security instead — coach_id on those two tables is kept
   only as a "who originally added this" audit field, not an access boundary.
-- Students are records coaches manage, NOT login users in v1.
+- Students CAN now have their own login (added post-v1-launch, see
+  `BACKEND.md`): a coach invites a student by email from their existing
+  roster record, and the student's account links to that exact record on
+  signup — there's no open self-signup for students. A linked student can
+  currently only READ their own classes; they can't book, edit their
+  profile, or see the calendar yet (that's a separate, not-yet-built phase).
 
 ## Pages
 ### Home (dashboard)
@@ -91,6 +96,19 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
   signed-in coach's own) so a coach can spot and avoid double-booking a
   student. Not built yet — each coach's Calendar/Home currently only shows
   their own classes.
+- Student Dashboard: stats about a student's own trainings and a streak.
+  No streak logic exists anywhere yet — this is net-new, not an extension
+  of the coach dashboard's stats.
+- Student Calendar: lets a student see coaches' schedules club-wide (every
+  coach, not just one) to spot free time and book. Needs a way to expose
+  coach display names to students (none exists yet) and a real booking flow
+  for students (today they can only read, not write).
+- "Open Class": a class can be marked Open or Closed so other students can
+  join it. Scope already decided: any class type, coach-set capacity. This
+  needs a new multi-student-per-class data model (`classes` is currently
+  strictly one student per row) and a rework of the double-booking
+  exclusion constraint, which is keyed on `classes.student_id` today. See
+  `BACKEND.md` for the current schema this has to build on.
 
 ## Non-goals (v1)
 - Payments, messaging, student self-service booking / public booking page (later).

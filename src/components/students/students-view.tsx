@@ -23,6 +23,7 @@ const DRAFT_STUDENT: Student = {
   gender: "Female",
   hand: "Right",
   since: new Date(),
+  linked: false,
 }
 
 export function StudentsView({
