@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "node --env-file=.env.local --import tsx scripts/seed.ts"
+    "seed": "node --env-file=.env.local --import tsx scripts/seed.ts",
+    "seed:coach2": "node --env-file=.env.local --import tsx scripts/seed-coach-2.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
