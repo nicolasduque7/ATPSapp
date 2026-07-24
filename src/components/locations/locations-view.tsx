@@ -58,7 +58,7 @@ export function LocationsView({ locations: initialLocations }: LocationsViewProp
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold text-foreground">Locations</h1>
-          <p className="text-sm text-muted-foreground">Where you coach.</p>
+          <p className="text-sm text-muted-foreground">Courts available to every coach.</p>
         </div>
         <Button
           type="button"

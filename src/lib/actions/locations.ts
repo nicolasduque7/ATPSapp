@@ -42,9 +42,11 @@ export async function createLocation(input: LocationInput): Promise<Location> {
 }
 
 export async function updateLocation(id: string, input: LocationInput): Promise<Location> {
-  const coachId = await requireCoachId();
+  await requireCoachId();
   const supabase = await createClient();
 
+  // Locations are a shared, club-wide list — any signed-in coach may edit
+  // any location, not just the one who originally added it.
   const { data, error } = await supabase
     .from("locations")
     .update({
@@ -55,7 +57,6 @@ export async function updateLocation(id: string, input: LocationInput): Promise<
       clay_courts: input.clayCourts,
     })
     .eq("id", id)
-    .eq("coach_id", coachId)
     .select(LOCATION_COLUMNS)
     .single();
 
@@ -69,14 +70,10 @@ export async function updateLocation(id: string, input: LocationInput): Promise<
 }
 
 export async function deleteLocation(id: string): Promise<void> {
-  const coachId = await requireCoachId();
+  await requireCoachId();
   const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("locations")
-    .delete()
-    .eq("id", id)
-    .eq("coach_id", coachId);
+  const { error } = await supabase.from("locations").delete().eq("id", id);
 
   if (error) {
     console.error("deleteLocation failed:", error);

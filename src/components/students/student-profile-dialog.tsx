@@ -390,7 +390,9 @@ function StudentProfileForm({
           {confirmingDelete ? (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-foreground">
-                Delete {student.name}? This also deletes all of their scheduled and past classes.
+                Delete {student.name}? This removes them from the shared roster for every coach. If
+                they still have any classes on the calendar, deletion will be blocked until those are
+                removed.
               </p>
               <div className="flex items-center gap-2">
                 <Button

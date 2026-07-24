@@ -83,7 +83,7 @@ export function StudentsView({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold text-foreground">Students</h1>
-          <p className="text-sm text-muted-foreground">Everyone you coach.</p>
+          <p className="text-sm text-muted-foreground">Every student, shared across coaches.</p>
         </div>
         <Button
           type="button"

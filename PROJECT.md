@@ -4,10 +4,16 @@
 Help tennis coaches schedule classes and manage sessions.
 
 ## Users
-- MULTIPLE coaches. Each coach signs up for their own account and sees ONLY
-  their own students, locations, and classes (multi-tenant isolation via a
-  coach_id on every row + Row Level Security).
-- Students are records the coach manages, NOT login users in v1.
+- MULTIPLE coaches, one shared club/academy. Every coach signs in with their
+  own account, but students and locations are a single shared pool everyone
+  can see, book with, edit, and delete — any coach can schedule a class with
+  any student at any location.
+- Classes (and recurring series) stay private per coach: each coach only
+  sees and manages the classes THEY booked, enforced via coach_id + Row
+  Level Security on the classes/class_series tables. Locations and students
+  use open Row Level Security instead — coach_id on those two tables is kept
+  only as a "who originally added this" audit field, not an access boundary.
+- Students are records coaches manage, NOT login users in v1.
 
 ## Pages
 ### Home (dashboard)
@@ -36,8 +42,8 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
 
 ## Data model
 - Coach (Supabase auth user): id, name, email
-- Location: id, coach_id, name, [address?]
-- Student: id, coach_id, name, nickname, level, age, gender, racket_type
+- Location: id, coach_id (who added it — shared across all coaches, not an access boundary), name, [address?]
+- Student: id, coach_id (who added them — shared across all coaches, not an access boundary), name, nickname, level, age, gender, racket_type
 - ClassSeries (recurrence rule, ONLY for recurring): id, coach_id, student_id,
   location_id, frequency (Daily/Weekly/Monthly), interval_count ("every N"
   days/weeks/months), weekdays (multi-select, Weekly only), day_of_month
@@ -49,7 +55,13 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
 ## Resolved decisions
 - Recurring classes: YES, alongside one-off classes (see scheduling model).
 - Deleting a class: hard delete. No cancellation status.
-- Accounts: multiple coaches, each isolated to their own data.
+- Accounts: multiple coaches. Students and locations are shared club-wide
+  (any coach can view, book, edit, or delete any student or location); classes
+  and recurring series remain private to the coach who booked them.
+- Deleting a student is blocked (not cascaded) if any coach still has a class
+  or series referencing them — matches how deleting a location already
+  behaves. Prevents one coach from silently wiping another coach's class
+  history by removing a shared student.
 - ClassSeries end_date: required (no indefinite recurrences).
 - Recurring class instances: generated up-front on series creation.
 - Editing a recurring class: two options — (a) this instance only, or (b) the
@@ -71,6 +83,14 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
 - Home dashboard extra metric: weekly hours coached.
 - Students page: list view showing name, nickname pill, and level pill per student. Clicking a student opens a pop-up with their full profile at the top and their upcoming classes below.
 - Coach name: pulled automatically from the auth provider on sign-up; no separate onboarding step.
+
+## Planned (not yet built)
+- Calendar visibility across coaches: since students are shared, a student
+  can end up booked with two different coaches at overlapping times. A
+  future calendar view should surface all coaches' sessions (not just the
+  signed-in coach's own) so a coach can spot and avoid double-booking a
+  student. Not built yet — each coach's Calendar/Home currently only shows
+  their own classes.
 
 ## Non-goals (v1)
 - Payments, messaging, student self-service booking / public booking page (later).

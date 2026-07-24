@@ -51,9 +51,11 @@ export async function createStudent(input: StudentInput): Promise<Student> {
 }
 
 export async function updateStudent(id: string, input: StudentInput): Promise<Student> {
-  const coachId = await requireCoachId();
+  await requireCoachId();
   const supabase = await createClient();
 
+  // Students are a shared, club-wide roster — any signed-in coach may edit
+  // any student, not just the one who originally added them.
   const { data, error } = await supabase
     .from("students")
     .update({
@@ -68,7 +70,6 @@ export async function updateStudent(id: string, input: StudentInput): Promise<St
       coaching_note: input.coachingNote ?? null,
     })
     .eq("id", id)
-    .eq("coach_id", coachId)
     .select(STUDENT_COLUMNS)
     .single();
 
@@ -82,18 +83,20 @@ export async function updateStudent(id: string, input: StudentInput): Promise<St
 }
 
 export async function deleteStudent(id: string): Promise<void> {
-  const coachId = await requireCoachId();
+  await requireCoachId();
   const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("students")
-    .delete()
-    .eq("id", id)
-    .eq("coach_id", coachId);
+  const { error } = await supabase.from("students").delete().eq("id", id);
 
   if (error) {
     console.error("deleteStudent failed:", error);
-    throw new Error("Couldn't delete student. Try again.");
+    // 23503 = foreign_key_violation — a class or series still references
+    // this student (any coach's, since students are shared club-wide).
+    throw new Error(
+      error.code === "23503"
+        ? "Couldn't delete — this student still has classes on the calendar. Remove those first."
+        : "Couldn't delete student. Try again.",
+    );
   }
 
   revalidatePath("/students");
