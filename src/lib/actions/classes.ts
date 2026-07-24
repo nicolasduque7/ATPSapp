@@ -1,5 +1,6 @@
 "use server";
 
+import { format } from "date-fns";
 import { revalidatePath } from "next/cache";
 
 import { requireCoachId } from "@/lib/auth";
@@ -16,6 +17,50 @@ import {
 } from "@/lib/dates";
 import type { ClassInstance, ClassType } from "@/lib/mock-data";
 import { mapClassRow, CLASS_COLUMNS } from "@/lib/queries/class-row";
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+// This student is shared club-wide, so an overlap can come from a
+// DIFFERENT coach's booking — a plain per-coach query can never see that
+// (RLS scopes it out). `check_student_conflict` is a SECURITY DEFINER RPC
+// that looks across all coaches for exactly this one check. A DB-level
+// exclusion constraint on `classes` is the real guarantee against races;
+// this call just turns that into a specific, friendly message ahead of time.
+async function assertNoStudentConflict(
+  supabase: SupabaseServerClient,
+  studentId: string,
+  startTime: Date,
+  endTime: Date,
+  excludeClassId?: string,
+): Promise<void> {
+  const { data, error } = await supabase.rpc("check_student_conflict", {
+    p_student_id: studentId,
+    p_start_time: toLocalTimestamp(startTime),
+    p_end_time: toLocalTimestamp(endTime),
+    p_exclude_class_id: excludeClassId ?? null,
+  });
+
+  if (error) {
+    console.error("check_student_conflict failed:", error);
+    throw new Error("Couldn't verify the student's schedule. Try again.");
+  }
+
+  const conflict = data?.[0];
+  if (conflict) {
+    const conflictStart = format(new Date(conflict.start_time), "MMM d, h:mm a");
+    const conflictEnd = format(new Date(conflict.end_time), "h:mm a");
+    throw new Error(
+      `This student is already booked with ${conflict.coach_name} from ${conflictStart} to ${conflictEnd}. Pick a different time or student.`,
+    );
+  }
+}
+
+// Backstop for the rare case where two coaches submit at the same instant:
+// the DB exclusion constraint (not the check above) is what actually blocks
+// the second write, surfaced as Postgres error code 23P01.
+function isExclusionViolation(error: { code?: string }): boolean {
+  return error.code === "23P01";
+}
 
 export interface ClassInstanceInput {
   studentId: string;
@@ -92,6 +137,8 @@ export async function createClass(input: ClassInstanceInput): Promise<ClassInsta
   const coachId = await requireCoachId();
   const supabase = await createClient();
 
+  await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime);
+
   const { data, error } = await supabase
     .from("classes")
     .insert({
@@ -108,7 +155,11 @@ export async function createClass(input: ClassInstanceInput): Promise<ClassInsta
 
   if (error) {
     console.error("createClass failed:", error);
-    throw new Error("Couldn't create the class. Try again.");
+    throw new Error(
+      isExclusionViolation(error)
+        ? "That time was just taken — please try again."
+        : "Couldn't create the class. Try again.",
+    );
   }
 
   revalidatePath("/");
@@ -142,6 +193,12 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<ClassI
     throw new Error("Until date must be on or after the start date.");
   }
 
+  for (const day of occurrences) {
+    const startTime = combineDateAndTime(day, input.startTime);
+    const endTime = addMinutes(startTime, input.durationMinutes);
+    await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
+  }
+
   const { data: series, error: seriesError } = await supabase
     .from("class_series")
     .insert({
@@ -172,7 +229,11 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<ClassI
   if (error) {
     console.error("createClassSeries instances failed:", error);
     await supabase.from("class_series").delete().eq("id", series.id);
-    throw new Error("Couldn't create the recurring series. Try again.");
+    throw new Error(
+      isExclusionViolation(error)
+        ? "One of these classes' times was just taken — please try again."
+        : "Couldn't create the recurring series. Try again.",
+    );
   }
 
   revalidatePath("/");
@@ -238,11 +299,23 @@ export async function updateClassSeries(
   );
 
   if (occurrences.length > 0) {
+    // The old future instances of this series were already deleted above,
+    // so this only ever flags a genuine conflict with a DIFFERENT booking.
+    for (const day of occurrences) {
+      const startTime = combineDateAndTime(day, input.startTime);
+      const endTime = addMinutes(startTime, input.durationMinutes);
+      await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
+    }
+
     const rows = buildInstanceRows(occurrences, seriesId, coachId, input);
     const { error: insertError } = await supabase.from("classes").insert(rows);
     if (insertError) {
       console.error("updateClassSeries (inserting future instances) failed:", insertError);
-      throw new Error("Couldn't save the series. Try again.");
+      throw new Error(
+        isExclusionViolation(insertError)
+          ? "One of these classes' times was just taken — please try again."
+          : "Couldn't save the series. Try again.",
+      );
     }
   }
 
@@ -311,6 +384,8 @@ export async function updateClassInstance(
   const coachId = await requireCoachId();
   const supabase = await createClient();
 
+  await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime, id);
+
   const { data, error } = await supabase
     .from("classes")
     .update({
@@ -328,7 +403,11 @@ export async function updateClassInstance(
 
   if (error) {
     console.error("updateClassInstance failed:", error);
-    throw new Error("Couldn't save class. Try again.");
+    throw new Error(
+      isExclusionViolation(error)
+        ? "That time was just taken — please try again."
+        : "Couldn't save class. Try again.",
+    );
   }
 
   revalidatePath("/");

@@ -105,13 +105,39 @@ async function getOrCreateTestCoach(): Promise<string> {
   return existing.id;
 }
 
+// Only this coach's own classes/series are wiped. Students and locations are
+// shared club-wide (see PROJECT.md) — another coach's classes may already
+// reference them, which makes their `on delete restrict` FK block a delete
+// silently succeeding here. Re-creating them from scratch every run isn't
+// even correct anymore now that they're shared: coach #2 depends on these
+// exact rows persisting. `upsertByName` below reuses them instead.
 async function wipeCoachData(coachId: string): Promise<void> {
-  // Order matters: classes reference students/locations/series, so they go
-  // first, then the series they may belong to, then students/locations.
   await supabase.from("classes").delete().eq("coach_id", coachId);
   await supabase.from("class_series").delete().eq("coach_id", coachId);
-  await supabase.from("students").delete().eq("coach_id", coachId);
-  await supabase.from("locations").delete().eq("coach_id", coachId);
+}
+
+// Reuses an existing shared row by name if one exists, otherwise inserts it.
+async function upsertByName<T extends Record<string, unknown>>(
+  table: "locations" | "students",
+  name: string,
+  insertRow: T,
+): Promise<string> {
+  const { data: existing, error: selectError } = await supabase
+    .from(table)
+    .select("id")
+    .eq("name", name)
+    .limit(1)
+    .maybeSingle();
+  if (selectError) throw selectError;
+  if (existing) return existing.id as string;
+
+  const { data: created, error: insertError } = await supabase
+    .from(table)
+    .insert(insertRow)
+    .select("id")
+    .single();
+  if (insertError) throw insertError;
+  return created.id as string;
 }
 
 interface LocationSeed {
@@ -155,50 +181,46 @@ async function seed(): Promise<void> {
   console.log("Wiping existing seed data for this coach...");
   await wipeCoachData(coachId);
 
-  console.log("Inserting locations...");
-  const { data: locations, error: locationsError } = await supabase
-    .from("locations")
-    .insert(
-      LOCATIONS.map((l) => ({
-        coach_id: coachId,
-        name: l.name,
-        address: l.address,
-        surface: l.surface,
-        hard_courts: l.hardCourts,
-        clay_courts: l.clayCourts,
-      })),
-    )
-    .select("id, name");
-  if (locationsError) throw locationsError;
+  console.log("Looking up or creating locations (shared club-wide)...");
+  const locationIds = new Map<string, string>();
+  for (const l of LOCATIONS) {
+    const id = await upsertByName("locations", l.name, {
+      coach_id: coachId,
+      name: l.name,
+      address: l.address,
+      surface: l.surface,
+      hard_courts: l.hardCourts,
+      clay_courts: l.clayCourts,
+    });
+    locationIds.set(l.name, id);
+  }
   const locationId = (name: string) => {
-    const match = locations.find((l) => l.name === name);
-    if (!match) throw new Error(`Seeded location "${name}" not found`);
-    return match.id as string;
+    const id = locationIds.get(name);
+    if (!id) throw new Error(`Seeded location "${name}" not found`);
+    return id;
   };
 
-  console.log("Inserting students...");
-  const { data: students, error: studentsError } = await supabase
-    .from("students")
-    .insert(
-      STUDENTS.map((s) => ({
-        coach_id: coachId,
-        name: s.name,
-        nickname: s.nickname ?? null,
-        level: s.level,
-        age: s.age,
-        gender: s.gender,
-        hand: s.hand,
-        racket_type: s.racketType,
-        since: localDate(s.since),
-        coaching_note: s.coachingNote ?? null,
-      })),
-    )
-    .select("id, name");
-  if (studentsError) throw studentsError;
+  console.log("Looking up or creating students (shared club-wide)...");
+  const studentIds = new Map<string, string>();
+  for (const s of STUDENTS) {
+    const id = await upsertByName("students", s.name, {
+      coach_id: coachId,
+      name: s.name,
+      nickname: s.nickname ?? null,
+      level: s.level,
+      age: s.age,
+      gender: s.gender,
+      hand: s.hand,
+      racket_type: s.racketType,
+      since: localDate(s.since),
+      coaching_note: s.coachingNote ?? null,
+    });
+    studentIds.set(s.name, id);
+  }
   const studentId = (name: string) => {
-    const match = students.find((s) => s.name === name);
-    if (!match) throw new Error(`Seeded student "${name}" not found`);
-    return match.id as string;
+    const id = studentIds.get(name);
+    if (!id) throw new Error(`Seeded student "${name}" not found`);
+    return id;
   };
 
   console.log("Inserting one-off classes...");
@@ -329,8 +351,8 @@ async function seed(): Promise<void> {
 
   console.log("\nSeed complete.");
   console.log(`  Coach:     ${TEST_COACH_EMAIL} / ${TEST_COACH_PASSWORD} (id: ${coachId})`);
-  console.log(`  Locations: ${locations.length}`);
-  console.log(`  Students:  ${students.length}`);
+  console.log(`  Locations: ${locationIds.size}`);
+  console.log(`  Students:  ${studentIds.size}`);
   console.log(`  Classes:   ${oneOffRows.length} one-off + ${recurringInstanceCount} from recurring series`);
 }
 
