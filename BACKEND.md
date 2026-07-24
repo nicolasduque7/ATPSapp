@@ -149,6 +149,18 @@ that ambiguity entirely.
    what the coach entered, the whole signup is rejected with a clear reason
    — nothing gets half-created.
 
+**Why the invite link needs its own route rule:** every route in this app is
+gated by `src/proxy.ts` (this project's Next.js 16 "Proxy" — the renamed
+successor to the old `middleware.ts` convention). It redirects any
+logged-out visitor to `/login` for every page except a small allowlist. The
+invite page is visited by someone who, by definition, doesn't have an
+account yet — so `/invite` **must** be in that allowlist
+(`isPublicRoute` in `src/proxy.ts`), or every real invite link bounces
+logged-out visitors straight to `/login` before they ever see it. This was
+missed when the invite feature first shipped and caused exactly that bug —
+if you ever see a public, pre-login page "not working" (redirecting to
+`/login` immediately), check this allowlist first.
+
 **Front-end connection:**
 - Coach side: the "Student login" section inside
   `src/components/students/student-profile-dialog.tsx`, backed by

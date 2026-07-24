@@ -51,6 +51,7 @@ interface StudentProfileDialogProps {
   onSaveClassInstance: (classInstance: ClassInstance) => void
   onSaveClassSeries: (seriesId: string, instances: ClassInstance[]) => void
   onDeleteClass: (target: { classId?: string; seriesId?: string }) => void
+  onInviteSent: (studentId: string, email: string) => void
 }
 
 const GENDER_OPTIONS: Gender[] = ["Female", "Male"]
@@ -79,6 +80,7 @@ export function StudentProfileDialog({
   onSaveClassInstance,
   onSaveClassSeries,
   onDeleteClass,
+  onInviteSent,
 }: StudentProfileDialogProps) {
   return (
     <Dialog open={!!student} onOpenChange={onOpenChange}>
@@ -100,6 +102,7 @@ export function StudentProfileDialog({
             onSaveClassInstance={onSaveClassInstance}
             onSaveClassSeries={onSaveClassSeries}
             onDeleteClass={onDeleteClass}
+            onInviteSent={onInviteSent}
           />
         )}
       </DialogContent>
@@ -118,6 +121,7 @@ interface StudentProfileFormProps {
   onSaveClassInstance: (classInstance: ClassInstance) => void
   onSaveClassSeries: (seriesId: string, instances: ClassInstance[]) => void
   onDeleteClass: (target: { classId?: string; seriesId?: string }) => void
+  onInviteSent: (studentId: string, email: string) => void
 }
 
 function StudentProfileForm({
@@ -131,6 +135,7 @@ function StudentProfileForm({
   onSaveClassInstance,
   onSaveClassSeries,
   onDeleteClass,
+  onInviteSent,
 }: StudentProfileFormProps) {
   const formId = useId()
   const [name, setName] = useState(student.name)
@@ -393,7 +398,11 @@ function StudentProfileForm({
               Linked
             </span>
           ) : (
-            <StudentInviteControl studentId={student.id} initialEmail={student.email ?? ""} />
+            <StudentInviteControl
+              studentId={student.id}
+              initialEmail={student.email ?? ""}
+              onInviteSent={(email) => onInviteSent(student.id, email)}
+            />
           )}
         </div>
       )}
@@ -511,7 +520,15 @@ function StudentProfileForm({
   )
 }
 
-function StudentInviteControl({ studentId, initialEmail }: { studentId: string; initialEmail: string }) {
+function StudentInviteControl({
+  studentId,
+  initialEmail,
+  onInviteSent,
+}: {
+  studentId: string
+  initialEmail: string
+  onInviteSent: (email: string) => void
+}) {
   const [email, setEmail] = useState(initialEmail)
   const [link, setLink] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -525,6 +542,7 @@ function StudentInviteControl({ studentId, initialEmail }: { studentId: string; 
     try {
       const inviteLink = await inviteStudent(studentId, email)
       setLink(inviteLink)
+      onInviteSent(email)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't create the invite. Try again.")
     } finally {

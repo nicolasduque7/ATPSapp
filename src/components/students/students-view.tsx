@@ -71,6 +71,10 @@ export function StudentsView({
     setClasses((prev) => [...prev.filter((c) => c.seriesId !== seriesId), ...instances])
   }
 
+  function handleInviteSent(studentId: string, email: string) {
+    setStudents((prev) => prev.map((student) => (student.id === studentId ? { ...student, email } : student)))
+  }
+
   function handleDeleteClass(target: { classId?: string; seriesId?: string }) {
     setClasses((prev) =>
       target.seriesId
@@ -139,6 +143,7 @@ export function StudentsView({
         onSaveClassInstance={handleSaveClassInstance}
         onSaveClassSeries={handleSaveClassSeries}
         onDeleteClass={handleDeleteClass}
+        onInviteSent={handleInviteSent}
       />
     </div>
   )
