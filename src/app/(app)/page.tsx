@@ -1,5 +1,7 @@
-import { ArrowRight } from "lucide-react";
-
+import { requireCoach } from "@/lib/auth";
+import { getAllClasses } from "@/lib/queries/classes";
+import { getLocations } from "@/lib/queries/locations";
+import { getStudents } from "@/lib/queries/students";
 import {
   getBusiestDayThisWeek,
   getClassCountsByLevel,
@@ -7,143 +9,51 @@ import {
   getClassesForToday,
   getDailyClassCounts,
   getHoursCoachedToday,
-  getLocationById,
   getNextClass,
-  getStudentById,
   getStudentsCoachedThisWeek,
-  mockCoach,
-} from "@/lib/mock-data";
-import { Avatar } from "@/components/avatar";
-import { Button } from "@/components/ui/button";
+} from "@/lib/dashboard";
+import { AddClassButton } from "@/components/add-class-button";
 import { ClassesRingStat } from "@/components/circular-progress";
 import { SchedulePills } from "@/components/schedule-pills";
 import { ClassesTimelineChart } from "@/components/classes-timeline-chart";
 import { TodayLevelsChart } from "@/components/today-levels-chart";
-import { NextClassCountdown } from "@/components/next-class-countdown";
+import { NextClassCard } from "@/components/next-class-card";
 import { CountUpNumber } from "@/components/count-up-number";
 
-function formatTime(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function formatDurationHours(durationMinutes: number): string {
-  return `${durationMinutes / 60}h`;
-}
-
-function formatDayLabel(date: Date): string {
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  if (date.toDateString() === now.toDateString()) return "Today";
-  if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  }).format(date);
-}
-
 export default async function HomePage(): Promise<React.JSX.Element> {
-  const [
-    todayClasses,
-    nextClass,
-    hoursToday,
-    classesThisWeek,
-    studentsThisWeek,
-    busiestDay,
-    dailyClassCounts,
-  ] = await Promise.all([
-    getClassesForToday(),
-    getNextClass(),
-    getHoursCoachedToday(),
-    getClassesCoachedThisWeek(),
-    getStudentsCoachedThisWeek(),
-    getBusiestDayThisWeek(),
-    getDailyClassCounts(14),
+  const [coach, classes, students, locations] = await Promise.all([
+    requireCoach(),
+    getAllClasses(),
+    getStudents(),
+    getLocations(),
   ]);
+
+  const todayClasses = getClassesForToday(classes);
+  const nextClass = getNextClass(classes);
+  const hoursToday = getHoursCoachedToday(classes);
+  const classesThisWeek = getClassesCoachedThisWeek(classes);
+  const studentsThisWeek = getStudentsCoachedThisWeek(classes);
+  const busiestDay = getBusiestDayThisWeek(classes);
+  const dailyClassCounts = getDailyClassCounts(classes, 14);
 
   const completedToday = todayClasses.filter((c) => c.completed).length;
   const remainingToday = todayClasses.filter((c) => !c.completed).length;
-  const levelCountsToday = getClassCountsByLevel(todayClasses);
-  const firstName = mockCoach.name.split(" ")[0];
+  const levelCountsToday = getClassCountsByLevel(todayClasses, students);
+  const firstName = coach.name.split(" ")[0];
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-foreground">Hello, {firstName}</h1>
-        <p className="text-sm text-muted-foreground">
-          Here&apos;s what&apos;s on your schedule.
-        </p>
-      </div>
-
-      <div className="relative animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 motion-reduce:animate-none rounded-3xl bg-primary p-6 text-primary-foreground">
-        <p className="text-sm text-primary-foreground/70">Next class</p>
-        {nextClass ? (
-          (() => {
-            const student = getStudentById(nextClass.studentId);
-            const location = getLocationById(nextClass.locationId);
-            return (
-              <>
-                <span className="absolute top-6 right-6 inline-flex items-center rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-medium text-primary-foreground">
-                  <NextClassCountdown startTime={nextClass.startTime} />
-                </span>
-
-                <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 pr-24">
-                  <p className="font-heading text-2xl font-bold">
-                    {formatDayLabel(nextClass.startTime)} · {formatTime(nextClass.startTime)}
-                  </p>
-                  <p className="text-sm text-primary-foreground/70">
-                    – {formatTime(nextClass.endTime)} · {formatDurationHours(nextClass.durationMinutes)}
-                  </p>
-                </div>
-
-                {student && (
-                  <div className="mt-4 flex items-center gap-3">
-                    <Avatar
-                      name={student.name}
-                      className="bg-primary-foreground/15 text-primary-foreground"
-                    />
-                    <div className="flex flex-1 flex-col gap-1.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-heading text-sm font-bold text-primary-foreground">
-                          {student.name}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="View class details"
-                          className="text-primary-foreground hover:bg-primary-foreground/15"
-                        >
-                          <ArrowRight />
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {location && (
-                          <span className="inline-flex w-fit items-center rounded-full bg-primary-foreground/15 px-2 py-0.5 text-[9px] font-medium text-primary-foreground/90">
-                            {location.name}
-                          </span>
-                        )}
-                        <span className="inline-flex w-fit items-center rounded-full bg-primary-foreground/15 px-2 py-0.5 text-[9px] font-medium text-primary-foreground/90">
-                          {student.level}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            );
-          })()
-        ) : (
-          <p className="mt-2 text-lg font-semibold">
-            Nothing scheduled — enjoy the break.
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl font-bold text-foreground">Hello, {firstName}</h1>
+          <p className="text-sm text-muted-foreground">
+            Here&apos;s what&apos;s on your schedule.
           </p>
-        )}
+        </div>
+        <AddClassButton students={students} locations={locations} />
       </div>
+
+      <NextClassCard nextClass={nextClass} students={students} locations={locations} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:col-span-2">
@@ -206,7 +116,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
         </div>
       </div>
 
-      <SchedulePills classes={todayClasses} />
+      <SchedulePills classes={todayClasses} students={students} />
 
       <ClassesTimelineChart data={dailyClassCounts} />
     </div>

@@ -9,12 +9,18 @@ const PopoverPortal = PopoverPrimitive.Portal
 function PopoverContent({
   className,
   children,
+  side = "bottom",
   sideOffset = 6,
+  align = "start",
   ...props
-}: PopoverPrimitive.Popup.Props & { sideOffset?: number }) {
+}: PopoverPrimitive.Popup.Props & {
+  side?: PopoverPrimitive.Positioner.Props["side"]
+  sideOffset?: number
+  align?: PopoverPrimitive.Positioner.Props["align"]
+}) {
   return (
     <PopoverPortal>
-      <PopoverPrimitive.Positioner sideOffset={sideOffset} className="z-50" align="start">
+      <PopoverPrimitive.Positioner side={side} sideOffset={sideOffset} className="z-50" align={align}>
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(

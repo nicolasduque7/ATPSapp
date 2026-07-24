@@ -111,6 +111,7 @@ export async function createClass(input: ClassInstanceInput): Promise<ClassInsta
     throw new Error("Couldn't create the class. Try again.");
   }
 
+  revalidatePath("/");
   revalidatePath("/students");
   revalidatePath("/calendar");
   return mapClassRow(data);
@@ -174,6 +175,7 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<ClassI
     throw new Error("Couldn't create the recurring series. Try again.");
   }
 
+  revalidatePath("/");
   revalidatePath("/students");
   revalidatePath("/calendar");
   return (data ?? []).map((row) => mapClassRow(row));
@@ -256,6 +258,7 @@ export async function updateClassSeries(
     throw new Error("Couldn't refresh the series. Try again.");
   }
 
+  revalidatePath("/");
   revalidatePath("/students");
   revalidatePath("/calendar");
   return (data ?? []).map((row) => mapClassRow(row, new Date(row.end_time) < now));
@@ -328,6 +331,7 @@ export async function updateClassInstance(
     throw new Error("Couldn't save class. Try again.");
   }
 
+  revalidatePath("/");
   revalidatePath("/students");
   revalidatePath("/calendar");
   return mapClassRow(data);
@@ -344,6 +348,7 @@ export async function deleteClassInstance(id: string): Promise<void> {
     throw new Error("Couldn't delete class. Try again.");
   }
 
+  revalidatePath("/");
   revalidatePath("/students");
   revalidatePath("/calendar");
 }
@@ -365,6 +370,7 @@ export async function deleteClassSeries(seriesId: string): Promise<void> {
     throw new Error("Couldn't delete the series. Try again.");
   }
 
+  revalidatePath("/");
   revalidatePath("/students");
   revalidatePath("/calendar");
 }

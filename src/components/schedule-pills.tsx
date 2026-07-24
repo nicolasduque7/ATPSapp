@@ -5,10 +5,11 @@ import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { getStudentById, type ClassInstance } from "@/lib/mock-data"
+import type { ClassInstance, Student } from "@/lib/mock-data"
 
 interface SchedulePillsProps {
   classes: ClassInstance[]
+  students: Student[]
 }
 
 function formatPillTime(date: Date): string {
@@ -17,10 +18,11 @@ function formatPillTime(date: Date): string {
   return `${hours}:${minutes}`
 }
 
-export function SchedulePills({ classes }: SchedulePillsProps) {
+export function SchedulePills({ classes, students }: SchedulePillsProps) {
   const [now, setNow] = useState(() => new Date())
   const [canScrollRight, setCanScrollRight] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const studentById = new Map(students.map((s) => [s.id, s]))
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 30_000)
@@ -79,7 +81,7 @@ export function SchedulePills({ classes }: SchedulePillsProps) {
             <div className="flex items-center gap-4">
               {sorted.map((c, index) => {
                 const completed = now >= c.endTime
-                const student = getStudentById(c.studentId)
+                const student = studentById.get(c.studentId)
                 return (
                   <div
                     key={c.id}
