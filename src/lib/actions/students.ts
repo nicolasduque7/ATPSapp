@@ -18,6 +18,12 @@ export interface StudentInput {
   racketType?: string;
   since: Date;
   coachingNote?: string;
+  forehandRating: number;
+  backhandRating: number;
+  backhandSliceRating: number;
+  volleyRating: number;
+  serveRating: number;
+  dropShotRating: number;
 }
 
 export async function createStudent(input: StudentInput): Promise<Student> {
@@ -37,6 +43,12 @@ export async function createStudent(input: StudentInput): Promise<Student> {
       racket_type: input.racketType ?? null,
       since: formatDateOnly(input.since),
       coaching_note: input.coachingNote ?? null,
+      forehand_rating: input.forehandRating,
+      backhand_rating: input.backhandRating,
+      backhand_slice_rating: input.backhandSliceRating,
+      volley_rating: input.volleyRating,
+      serve_rating: input.serveRating,
+      drop_shot_rating: input.dropShotRating,
     })
     .select(STUDENT_COLUMNS)
     .single();
@@ -68,6 +80,12 @@ export async function updateStudent(id: string, input: StudentInput): Promise<St
       racket_type: input.racketType ?? null,
       since: formatDateOnly(input.since),
       coaching_note: input.coachingNote ?? null,
+      forehand_rating: input.forehandRating,
+      backhand_rating: input.backhandRating,
+      backhand_slice_rating: input.backhandSliceRating,
+      volley_rating: input.volleyRating,
+      serve_rating: input.serveRating,
+      drop_shot_rating: input.dropShotRating,
     })
     .eq("id", id)
     .select(STUDENT_COLUMNS)

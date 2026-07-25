@@ -116,7 +116,7 @@ export default async function HomePage(): Promise<React.JSX.Element> {
         </div>
       </div>
 
-      <SchedulePills classes={todayClasses} students={students} />
+      <SchedulePills classes={todayClasses} entities={students} />
 
       <ClassesTimelineChart data={dailyClassCounts} />
     </div>

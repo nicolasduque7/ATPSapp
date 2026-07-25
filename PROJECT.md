@@ -16,9 +16,12 @@ Help tennis coaches schedule classes and manage sessions.
 - Students CAN now have their own login (added post-v1-launch, see
   `BACKEND.md`): a coach invites a student by email from their existing
   roster record, and the student's account links to that exact record on
-  signup — there's no open self-signup for students. A linked student can
-  currently only READ their own classes; they can't book, edit their
-  profile, or see the calendar yet (that's a separate, not-yet-built phase).
+  signup — there's no open self-signup for students. A linked student now
+  has their own Home dashboard and Calendar (see Pages below) and can book,
+  edit, and delete their own classes — one-off or recurring — with any
+  coach, immediately (no coach-approval step). They still can't edit their
+  own profile fields (level, notes, stroke ratings, etc. remain
+  coach-write-only).
 
 ## Pages
 ### Home (dashboard)
@@ -35,7 +38,30 @@ Create/edit/delete locations. Each location is a tag shown on calendar events.
 
 ### Students
 Create/edit/delete students. Fields: name, nickname, level, age, gender,
-racket type. Name + level shown on calendar events.
+racket type. Name + level shown on calendar events. Coaches also set 6
+stroke-strength ratings (Forehand, Backhand, Backhand Slice, Volley, Serve,
+Drop-shot; 0-100 each) from the student's profile — read-only for the
+student, shown on their own dashboard's radar chart.
+
+### Student Home (dashboard)
+The student-facing counterpart to the coach Home dashboard, at `/student`.
+Shows: next upcoming class (coach, location, time — with a "Book a class"
+button always available top-right), today's classes completed/remaining
+(activity ring), a stroke-strength radar chart (the 6 ratings above), hours
+trained today, this week's classes/coaches-trained-with/busiest-day, a
+today's-schedule strip, and the same classes-timeline bar chart with
+time-range slider as the coach dashboard. A student can click into their
+next class to edit or delete it.
+
+### Student Calendar
+The student-facing counterpart to the coach Calendar, at `/student/calendar`.
+Same Month/Week/3-Day/Day views and event-pill styling as the coach
+Calendar, showing only the student's own classes (always labeled with which
+coach, since a student's classes legitimately span multiple coaches). A
+"Coaches' working hours" toggle overlays coaches' declared availability,
+read-only — clicking a working-hours block does nothing, only class events
+open the edit dialog. The "+" button opens the same booking dialog as
+Student Home, with a coach-picker instead of a student-picker.
 
 ## Scheduling model (IMPORTANT)
 Coaches can create TWO kinds of classes:
@@ -48,7 +74,7 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
 ## Data model
 - Coach (Supabase auth user): id, name, email
 - Location: id, coach_id (who added it — shared across all coaches, not an access boundary), name, [address?]
-- Student: id, coach_id (who added them — shared across all coaches, not an access boundary), name, nickname, level, age, gender, racket_type
+- Student: id, coach_id (who added them — shared across all coaches, not an access boundary), name, nickname, level, age, gender, racket_type, forehand_rating, backhand_rating, backhand_slice_rating, volley_rating, serve_rating, drop_shot_rating (all six ratings 0-100, coach-set only)
 - ClassSeries (recurrence rule, ONLY for recurring): id, coach_id, student_id,
   location_id, frequency (Daily/Weekly/Monthly), interval_count ("every N"
   days/weeks/months), weekdays (multi-select, Weekly only), day_of_month
@@ -88,27 +114,30 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
 - Home dashboard extra metric: weekly hours coached.
 - Students page: list view showing name, nickname pill, and level pill per student. Clicking a student opens a pop-up with their full profile at the top and their upcoming classes below.
 - Coach name: pulled automatically from the auth provider on sign-up; no separate onboarding step.
+- Calendar visibility across coaches: coaches can toggle on other coaches'
+  booked classes and declared working hours on their own Calendar (off by
+  default), so a coach can spot and avoid double-booking a shared student.
+- Student self-booking: a student picks a coach explicitly (no implied
+  single coach), books immediately with no coach-approval step, and can
+  book recurring series with the same Daily/Weekly/Monthly options a coach
+  has. A student can edit or delete ANY class where they're the student —
+  including ones a coach booked for them, not just ones they self-booked.
+- Student stroke ratings: 6 categories (Forehand, Backhand, Backhand Slice,
+  Volley, Serve, Drop-shot), 0-100, coach-set only — shown to the student
+  read-only as a radar chart on their own dashboard.
+- A small "Don't forget to notify the coach/student about these changes"
+  reminder (warning icon, dismissible dialog) appears after editing or
+  deleting a class, on both the coach and student interfaces. It's a manual
+  UI nudge, not an actual notification — see `BACKEND.md`'s known gaps.
 
 ## Planned (not yet built)
-- Calendar visibility across coaches: since students are shared, a student
-  can end up booked with two different coaches at overlapping times. A
-  future calendar view should surface all coaches' sessions (not just the
-  signed-in coach's own) so a coach can spot and avoid double-booking a
-  student. Not built yet — each coach's Calendar/Home currently only shows
-  their own classes.
-- Student Dashboard: stats about a student's own trainings and a streak.
-  No streak logic exists anywhere yet — this is net-new, not an extension
-  of the coach dashboard's stats.
-- Student Calendar: lets a student see coaches' schedules club-wide (every
-  coach, not just one) to spot free time and book. Needs a way to expose
-  coach display names to students (none exists yet) and a real booking flow
-  for students (today they can only read, not write).
 - "Open Class": a class can be marked Open or Closed so other students can
   join it. Scope already decided: any class type, coach-set capacity. This
   needs a new multi-student-per-class data model (`classes` is currently
-  strictly one student per row) and a rework of the double-booking
-  exclusion constraint, which is keyed on `classes.student_id` today. See
-  `BACKEND.md` for the current schema this has to build on.
+  strictly one student per row) and a rework of both double-booking
+  exclusion constraints, which are keyed on `classes.student_id` and
+  `classes.coach_id` today. See `BACKEND.md` for the current schema this
+  has to build on.
 
 ## Non-goals (v1)
-- Payments, messaging, student self-service booking / public booking page (later).
+- Payments, messaging, public booking page (later).

@@ -24,6 +24,12 @@ const DRAFT_STUDENT: Student = {
   hand: "Right",
   since: new Date(),
   linked: false,
+  forehandRating: 0,
+  backhandRating: 0,
+  backhandSliceRating: 0,
+  volleyRating: 0,
+  serveRating: 0,
+  dropShotRating: 0,
 }
 
 export function StudentsView({

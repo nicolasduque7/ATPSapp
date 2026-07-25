@@ -1,4 +1,4 @@
-import { requireCoachId } from "@/lib/auth";
+import { requireCoachId, requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { parseDateOnly, type SeriesFrequency } from "@/lib/dates";
 import type { AvailabilityBlock } from "@/lib/mock-data";
@@ -17,6 +17,27 @@ export async function getAllAvailabilityBlocks(): Promise<AvailabilityBlock[]> {
 
   if (error) {
     console.error("getAllAvailabilityBlocks failed:", error);
+    throw new Error("Couldn't load working hours. Try again.");
+  }
+
+  return (data ?? []).map(mapAvailabilityBlockRow);
+}
+
+// Same club-wide read, for the Student Calendar's read-only "Coaches'
+// working hours" toggle. Relies on coach_availability_blocks_select_student.
+// No series-level equivalent — mirrors the class_series precedent that no
+// UI needs another coach's recurrence rule, only the materialized instances.
+export async function getAvailabilityBlocksForStudent(): Promise<AvailabilityBlock[]> {
+  await requireStudent();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("coach_availability_blocks")
+    .select(AVAILABILITY_BLOCK_COLUMNS)
+    .order("start_time");
+
+  if (error) {
+    console.error("getAvailabilityBlocksForStudent failed:", error);
     throw new Error("Couldn't load working hours. Try again.");
   }
 

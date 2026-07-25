@@ -5,11 +5,21 @@ import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import type { ClassInstance, Student } from "@/lib/mock-data"
+import type { ClassInstance } from "@/lib/mock-data"
+
+interface ScheduleEntity {
+  id: string
+  name: string
+}
 
 interface SchedulePillsProps {
   classes: ClassInstance[]
-  students: Student[]
+  entities: ScheduleEntity[]
+  // A plain key rather than a function — this component is rendered from a
+  // server component (the Home pages), and functions can't cross that
+  // server/client boundary as props.
+  entityIdKey?: "studentId" | "coachId"
+  calendarHref?: string
 }
 
 function formatPillTime(date: Date): string {
@@ -18,11 +28,16 @@ function formatPillTime(date: Date): string {
   return `${hours}:${minutes}`
 }
 
-export function SchedulePills({ classes, students }: SchedulePillsProps) {
+export function SchedulePills({
+  classes,
+  entities,
+  entityIdKey = "studentId",
+  calendarHref = "/calendar",
+}: SchedulePillsProps) {
   const [now, setNow] = useState(() => new Date())
   const [canScrollRight, setCanScrollRight] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const studentById = new Map(students.map((s) => [s.id, s]))
+  const entityById = new Map(entities.map((e) => [e.id, e]))
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 30_000)
@@ -58,7 +73,7 @@ export function SchedulePills({ classes, students }: SchedulePillsProps) {
           )}
         </div>
         <Link
-          href="/calendar"
+          href={calendarHref}
           aria-label="View calendar"
           className="rounded-full text-muted-foreground outline-none transition-colors duration-200 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
         >
@@ -81,11 +96,11 @@ export function SchedulePills({ classes, students }: SchedulePillsProps) {
             <div className="flex items-center gap-4">
               {sorted.map((c, index) => {
                 const completed = now >= c.endTime
-                const student = studentById.get(c.studentId)
+                const entity = entityById.get(c[entityIdKey])
                 return (
                   <div
                     key={c.id}
-                    title={student?.name}
+                    title={entity?.name}
                     style={{ "--tw-animation-delay": `${index * 40}ms` } as React.CSSProperties}
                     className="flex min-w-14 flex-1 animate-in fade-in fill-mode-both flex-col items-center gap-2 duration-300 motion-reduce:animate-none"
                   >

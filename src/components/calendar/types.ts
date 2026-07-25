@@ -1,5 +1,10 @@
 import type { ClassInstanceInput, ClassSeriesInput, ClassSeriesUpdateInput } from "@/lib/actions/classes"
 import type {
+  StudentClassInstanceInput,
+  StudentClassSeriesInput,
+  StudentClassSeriesUpdateInput,
+} from "@/lib/actions/student-classes"
+import type {
   AvailabilityBlockInput,
   AvailabilitySeriesInput,
   AvailabilitySeriesUpdateInput,
@@ -17,6 +22,15 @@ export type ClassFormSubmission =
   | { kind: "series-create"; input: ClassSeriesInput }
   | { kind: "instance-edit"; input: ClassInstanceInput }
   | { kind: "series-edit"; seriesId: string; input: ClassSeriesUpdateInput }
+
+// Mirrors ClassFormSubmission for the student-facing dialog — the student
+// picks a coach instead of a student, so the input shapes carry `coachId`
+// instead of `studentId` (see StudentClassInstanceInput and friends).
+export type StudentClassFormSubmission =
+  | { kind: "one-off"; input: StudentClassInstanceInput }
+  | { kind: "series-create"; input: StudentClassSeriesInput }
+  | { kind: "instance-edit"; input: StudentClassInstanceInput }
+  | { kind: "series-edit"; seriesId: string; input: StudentClassSeriesUpdateInput }
 
 export interface CalendarClassEvent {
   id: string

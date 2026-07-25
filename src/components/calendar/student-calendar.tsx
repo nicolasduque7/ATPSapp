@@ -12,94 +12,76 @@ import { CalendarToolbar } from "@/components/calendar/calendar-toolbar"
 import { CalendarEventTile, CalendarEventTileCompact } from "@/components/calendar/calendar-event"
 import { CoachFilterPopover } from "@/components/calendar/coach-filter-popover"
 import { CALENDAR_VIEWS, MAX_TIME, MIN_TIME, localizer } from "@/components/calendar/calendar-config"
-import { ClassEditDialog, createDraftEvent } from "@/components/calendar/class-edit-dialog"
-import { AvailabilityEditDialog } from "@/components/calendar/availability-edit-dialog"
+import { StudentClassEditDialog } from "@/components/calendar/student-class-edit-dialog"
+import { createDraftEvent } from "@/components/calendar/class-edit-dialog"
 import { NotifyDialog } from "@/components/notify-dialog"
 import { mapClassInstanceToEvent } from "@/components/calendar/map-class-instance"
-import { mapAvailabilityBlockToEvent } from "@/components/calendar/map-availability-block"
 import { getCoachAccentVar } from "@/lib/coach-colors"
 import {
-  createClass,
-  createClassSeries,
-  deleteClassInstance,
-  deleteClassSeries,
-  updateClassInstance,
-  updateClassSeries,
-} from "@/lib/actions/classes"
-import {
-  createAvailabilityBlock,
-  createAvailabilitySeries,
-  deleteAvailabilityBlock,
-  deleteAvailabilitySeries,
-  updateAvailabilityBlock,
-  updateAvailabilitySeries,
-} from "@/lib/actions/availability"
+  createStudentClass,
+  createStudentClassSeries,
+  deleteStudentClassInstance,
+  deleteStudentClassSeries,
+  updateStudentClassInstance,
+  updateStudentClassSeries,
+} from "@/lib/actions/student-classes"
 import type {
-  AvailabilityDialogTarget,
-  AvailabilityFormSubmission,
   CalendarClassEvent,
   CalendarEvent,
   CalendarViewKey,
-  ClassFormSubmission,
+  StudentClassFormSubmission,
 } from "@/components/calendar/types"
-import type { AvailabilityBlock, Coach, Location, Student } from "@/lib/mock-data"
+import type { Coach, Location, Student } from "@/lib/mock-data"
 
-interface ClassCalendarProps {
+interface StudentCalendarProps {
   classEvents: CalendarEvent[]
   availabilityEvents: CalendarEvent[]
-  students: Student[]
-  locations: Location[]
   coaches: Coach[]
-  currentCoachId: string
+  locations: Location[]
+  studentProfile: Student
 }
 
-export function ClassCalendar({
+export function StudentCalendar({
   classEvents: initialClassEvents,
   availabilityEvents: initialAvailabilityEvents,
-  students,
-  locations,
   coaches,
-  currentCoachId,
-}: ClassCalendarProps) {
+  locations,
+  studentProfile,
+}: StudentCalendarProps) {
   const [view, setView] = useState<CalendarViewKey>("week")
   const [date, setDate] = useState(() => new Date())
   const [classEvents, setClassEvents] = useState(initialClassEvents)
-  const [availabilityEvents, setAvailabilityEvents] = useState(initialAvailabilityEvents)
+  const [availabilityEvents] = useState(initialAvailabilityEvents)
   const [selectedEvent, setSelectedEvent] = useState<CalendarClassEvent | null>(null)
   const [creatingEvent, setCreatingEvent] = useState<CalendarClassEvent | null>(null)
-  const [editingAvailability, setEditingAvailability] = useState<AvailabilityDialogTarget | null>(null)
-  const [visibleClassCoachIds, setVisibleClassCoachIds] = useState<Set<string>>(new Set())
   const [visibleAvailabilityCoachIds, setVisibleAvailabilityCoachIds] = useState<Set<string>>(new Set())
   const [notifyOpen, setNotifyOpen] = useState(false)
 
-  const otherCoaches = useMemo(
-    () => coaches.filter((coach) => coach.id !== currentCoachId),
-    [coaches, currentCoachId]
-  )
-
+  // Every fetched class already IS the student's own (RLS guarantees it), so
+  // unlike the coach calendar there's no "other students' bookings" toggle —
+  // classes always show. Only working-hours blocks are gated by the toggle.
   const displayedEvents = useMemo(() => {
-    const filteredClasses = classEvents.filter(
-      (event) => event.resource.coachId === currentCoachId || visibleClassCoachIds.has(event.resource.coachId)
-    )
     const filteredAvailability = availabilityEvents.filter((event) =>
       visibleAvailabilityCoachIds.has(event.resource.coachId)
     )
-    return [...filteredClasses, ...filteredAvailability]
-  }, [classEvents, availabilityEvents, currentCoachId, visibleClassCoachIds, visibleAvailabilityCoachIds])
+    return [...classEvents, ...filteredAvailability]
+  }, [classEvents, availabilityEvents, visibleAvailabilityCoachIds])
 
+  // A student's classes legitimately span multiple coaches, so the
+  // coach-name badge should always render — passing an id that can never
+  // match a real coach keeps CalendarEventTile's "isOwn" check permanently
+  // false, which is exactly that behavior with no changes to that component.
   const components = useMemo(
     () => ({
       toolbar: CalendarToolbar,
-      event: (props: EventProps<CalendarEvent>) => (
-        <CalendarEventTile event={props.event} currentCoachId={currentCoachId} />
-      ),
+      event: (props: EventProps<CalendarEvent>) => <CalendarEventTile event={props.event} currentCoachId="" />,
       month: {
         event: (props: EventProps<CalendarEvent>) => (
-          <CalendarEventTileCompact event={props.event} currentCoachId={currentCoachId} />
+          <CalendarEventTileCompact event={props.event} currentCoachId="" />
         ),
       },
     }),
-    [currentCoachId]
+    []
   )
 
   function eventPropGetter(event: CalendarEvent) {
@@ -109,22 +91,7 @@ export function ClassCalendar({
         style: { "--event-accent": `var(${getCoachAccentVar(event.resource.coachId, coaches)})` } as React.CSSProperties,
       }
     }
-    if (event.resource.coachId !== currentCoachId) {
-      return {
-        className: "courtside-other-coach-event",
-        style: { "--event-accent": `var(${getCoachAccentVar(event.resource.coachId, coaches)})` } as React.CSSProperties,
-      }
-    }
     return {}
-  }
-
-  function toggleClassCoach(coachId: string) {
-    setVisibleClassCoachIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(coachId)) next.delete(coachId)
-      else next.add(coachId)
-      return next
-    })
   }
 
   function toggleAvailabilityCoach(coachId: string) {
@@ -140,35 +107,26 @@ export function ClassCalendar({
     setCreatingEvent(createDraftEvent())
   }
 
+  // Working-hours blocks are permanently read-only on the student calendar —
+  // there's no valid "editable" case for them here, so this is
+  // unconditional rather than the coach calendar's ownership check.
   function handleSelectEvent(event: CalendarEvent) {
-    if (event.resource.coachId !== currentCoachId) return
-    if (event.kind === "class") {
-      setSelectedEvent(event)
-      return
-    }
-    const block: AvailabilityBlock = {
-      id: event.id,
-      coachId: event.resource.coachId,
-      seriesId: event.resource.seriesId ?? null,
-      locationIds: event.resource.locationIds,
-      startTime: event.start,
-      endTime: event.end,
-    }
-    setEditingAvailability({ kind: "block", block })
+    if (event.kind !== "class") return
+    setSelectedEvent(event)
   }
 
-  async function handleSave(submission: ClassFormSubmission) {
+  async function handleSave(submission: StudentClassFormSubmission) {
     switch (submission.kind) {
       case "one-off": {
-        const created = await createClass(submission.input)
-        const mapped = mapClassInstanceToEvent(created, students, locations, coaches)
+        const created = await createStudentClass(submission.input)
+        const mapped = mapClassInstanceToEvent(created, [studentProfile], locations, coaches)
         if (mapped) setClassEvents((prev) => [...prev, { kind: "class" as const, ...mapped }])
         return
       }
       case "series-create": {
-        const created = await createClassSeries(submission.input)
+        const created = await createStudentClassSeries(submission.input)
         const mapped = created.flatMap((instance) => {
-          const event = mapClassInstanceToEvent(instance, students, locations, coaches)
+          const event = mapClassInstanceToEvent(instance, [studentProfile], locations, coaches)
           return event ? [{ kind: "class" as const, ...event }] : []
         })
         setClassEvents((prev) => [...prev, ...mapped])
@@ -176,8 +134,8 @@ export function ClassCalendar({
       }
       case "instance-edit": {
         if (!selectedEvent) return
-        const updated = await updateClassInstance(selectedEvent.id, submission.input)
-        const mapped = mapClassInstanceToEvent(updated, students, locations, coaches)
+        const updated = await updateStudentClassInstance(selectedEvent.id, submission.input)
+        const mapped = mapClassInstanceToEvent(updated, [studentProfile], locations, coaches)
         if (mapped) {
           setClassEvents((prev) => prev.map((e) => (e.id === mapped.id ? { kind: "class" as const, ...mapped } : e)))
         }
@@ -185,9 +143,9 @@ export function ClassCalendar({
         return
       }
       case "series-edit": {
-        const updated = await updateClassSeries(submission.seriesId, submission.input)
+        const updated = await updateStudentClassSeries(submission.seriesId, submission.input)
         const mapped = updated.flatMap((instance) => {
-          const event = mapClassInstanceToEvent(instance, students, locations, coaches)
+          const event = mapClassInstanceToEvent(instance, [studentProfile], locations, coaches)
           return event ? [{ kind: "class" as const, ...event }] : []
         })
         setClassEvents((prev) => [
@@ -204,68 +162,14 @@ export function ClassCalendar({
     const target = classEvents.find((e) => e.id === eventId)
     if (options?.deleteSeries && target?.resource.seriesId) {
       const seriesId = target.resource.seriesId
-      await deleteClassSeries(seriesId)
+      await deleteStudentClassSeries(seriesId)
       setClassEvents((prev) => prev.filter((e) => e.resource.seriesId !== seriesId))
     } else {
-      await deleteClassInstance(eventId)
+      await deleteStudentClassInstance(eventId)
       setClassEvents((prev) => prev.filter((e) => e.id !== eventId))
     }
     setSelectedEvent(null)
     setNotifyOpen(true)
-  }
-
-  async function handleSaveAvailability(submission: AvailabilityFormSubmission) {
-    switch (submission.kind) {
-      case "one-off-create": {
-        const created = await createAvailabilityBlock(submission.input)
-        setAvailabilityEvents((prev) => [
-          ...prev,
-          { kind: "availability" as const, ...mapAvailabilityBlockToEvent(created, coaches, locations) },
-        ])
-        return
-      }
-      case "series-create": {
-        const { blocks } = await createAvailabilitySeries(submission.input)
-        const mapped = blocks.map((block) => ({
-          kind: "availability" as const,
-          ...mapAvailabilityBlockToEvent(block, coaches, locations),
-        }))
-        setAvailabilityEvents((prev) => [...prev, ...mapped])
-        return
-      }
-      case "one-off-edit": {
-        if (editingAvailability?.kind !== "block") return
-        const updated = await updateAvailabilityBlock(editingAvailability.block.id, submission.input)
-        const mapped = mapAvailabilityBlockToEvent(updated, coaches, locations)
-        setAvailabilityEvents((prev) =>
-          prev.map((e) => (e.id === mapped.id ? { kind: "availability" as const, ...mapped } : e))
-        )
-        return
-      }
-      case "series-edit": {
-        const updated = await updateAvailabilitySeries(submission.seriesId, submission.input)
-        const mapped = updated.map((block) => ({
-          kind: "availability" as const,
-          ...mapAvailabilityBlockToEvent(block, coaches, locations),
-        }))
-        setAvailabilityEvents((prev) => [
-          ...prev.filter((e) => e.resource.seriesId !== submission.seriesId),
-          ...mapped,
-        ])
-        return
-      }
-    }
-  }
-
-  async function handleDeleteAvailability(target: { kind: "block" | "series"; id: string }) {
-    if (target.kind === "series") {
-      await deleteAvailabilitySeries(target.id)
-      setAvailabilityEvents((prev) => prev.filter((e) => e.resource.seriesId !== target.id))
-    } else {
-      await deleteAvailabilityBlock(target.id)
-      setAvailabilityEvents((prev) => prev.filter((e) => e.id !== target.id))
-    }
-    setEditingAvailability(null)
   }
 
   return (
@@ -281,9 +185,9 @@ export function ClassCalendar({
           type="button"
           variant="positive"
           size="icon"
-          aria-label="Add class"
+          aria-label="Book a class"
           onClick={handleAddClick}
-          disabled={students.length === 0 || locations.length === 0}
+          disabled={coaches.length === 0 || locations.length === 0}
         >
           <Plus />
         </Button>
@@ -292,15 +196,7 @@ export function ClassCalendar({
       <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-3">
         <span className="text-xs font-medium text-muted-foreground">Show on calendar:</span>
         <CoachFilterPopover
-          label="Classes booked"
-          coaches={otherCoaches}
-          allCoaches={coaches}
-          selectedIds={visibleClassCoachIds}
-          onToggle={toggleClassCoach}
-          emptyLabel="No other coaches yet."
-        />
-        <CoachFilterPopover
-          label="Working hours"
+          label="Coaches' working hours"
           coaches={coaches}
           allCoaches={coaches}
           selectedIds={visibleAvailabilityCoachIds}
@@ -340,10 +236,10 @@ export function ClassCalendar({
         </div>
       )}
 
-      <ClassEditDialog
+      <StudentClassEditDialog
         event={selectedEvent}
         mode="edit"
-        students={students}
+        coaches={coaches}
         locations={locations}
         onOpenChange={(open) => {
           if (!open) setSelectedEvent(null)
@@ -352,25 +248,15 @@ export function ClassCalendar({
         onDelete={handleDelete}
       />
 
-      <ClassEditDialog
+      <StudentClassEditDialog
         event={creatingEvent}
         mode="create"
-        students={students}
+        coaches={coaches}
         locations={locations}
         onOpenChange={(open) => {
           if (!open) setCreatingEvent(null)
         }}
         onSave={handleSave}
-      />
-
-      <AvailabilityEditDialog
-        target={editingAvailability}
-        locations={locations}
-        onOpenChange={(open) => {
-          if (!open) setEditingAvailability(null)
-        }}
-        onSave={handleSaveAvailability}
-        onDelete={handleDeleteAvailability}
       />
 
       <NotifyDialog open={notifyOpen} onOpenChange={setNotifyOpen} />

@@ -54,6 +54,20 @@ export function getStudentsCoachedThisWeek(classes: ClassInstance[]): number {
   return studentIds.size
 }
 
+// The student-side analog of getStudentsCoachedThisWeek: on a student's own
+// classes array every row has the same studentId (themselves), so counting
+// distinct students is meaningless there — distinct coaches is the useful
+// stat instead.
+export function getCoachesTrainedWithThisWeek(classes: ClassInstance[]): number {
+  const { start, end } = getCurrentWorkingWeekRange()
+  const coachIds = new Set(
+    classes
+      .filter((c) => c.completed && c.startTime >= start && c.startTime < end)
+      .map((c) => c.coachId)
+  )
+  return coachIds.size
+}
+
 const WEEKDAY_ABBREVIATIONS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
 export function getBusiestDayThisWeek(classes: ClassInstance[]): string | undefined {

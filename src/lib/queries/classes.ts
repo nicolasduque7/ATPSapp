@@ -1,4 +1,4 @@
-import { requireCoachId } from "@/lib/auth";
+import { requireCoachId, requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { toLocalTimestamp } from "@/lib/dates";
 import type { ClassInstance } from "@/lib/mock-data";
@@ -40,6 +40,28 @@ export async function getAllClasses(): Promise<ClassInstance[]> {
 
   if (error) {
     console.error("getAllClasses failed:", error);
+    throw new Error("Couldn't load classes. Try again.");
+  }
+
+  const now = new Date();
+  return (data ?? []).map((row) => mapClassRow(row, new Date(row.end_time) < now));
+}
+
+// A student's own classes, across every coach — explicitly filtered rather
+// than relying solely on RLS, matching this file's established
+// defense-in-depth convention (see getAllClasses above).
+export async function getStudentClasses(): Promise<ClassInstance[]> {
+  const { studentId } = await requireStudent();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("classes")
+    .select(CLASS_COLUMNS)
+    .eq("student_id", studentId)
+    .order("start_time");
+
+  if (error) {
+    console.error("getStudentClasses failed:", error);
     throw new Error("Couldn't load classes. Try again.");
   }
 

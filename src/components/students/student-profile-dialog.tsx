@@ -14,7 +14,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
 import { Avatar } from "@/components/avatar"
+import { NotifyDialog } from "@/components/notify-dialog"
 import { LevelBadge } from "@/components/level-badge"
 import { MonthYearPicker } from "@/components/month-year-picker"
 import { ClassEditDialog } from "@/components/calendar/class-edit-dialog"
@@ -147,12 +149,19 @@ function StudentProfileForm({
   const [racketType, setRacketType] = useState(student.racketType ?? "")
   const [since, setSince] = useState(student.since)
   const [coachingNote, setCoachingNote] = useState(student.coachingNote ?? "")
+  const [forehandRating, setForehandRating] = useState(student.forehandRating)
+  const [backhandRating, setBackhandRating] = useState(student.backhandRating)
+  const [backhandSliceRating, setBackhandSliceRating] = useState(student.backhandSliceRating)
+  const [volleyRating, setVolleyRating] = useState(student.volleyRating)
+  const [serveRating, setServeRating] = useState(student.serveRating)
+  const [dropShotRating, setDropShotRating] = useState(student.dropShotRating)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [selectedClass, setSelectedClass] = useState<ClassInstance | null>(null)
+  const [notifyOpen, setNotifyOpen] = useState(false)
 
   const upcoming = useMemo(
     () => getUpcomingClassesForStudent(classes, student.id),
@@ -204,6 +213,12 @@ function StudentProfileForm({
         racketType: racketType.trim() || undefined,
         since,
         coachingNote: coachingNote.trim() || undefined,
+        forehandRating,
+        backhandRating,
+        backhandSliceRating,
+        volleyRating,
+        serveRating,
+        dropShotRating,
       })
       onOpenChange(false)
     } catch (err) {
@@ -241,6 +256,7 @@ function StudentProfileForm({
         break
     }
     setSelectedClass(null)
+    setNotifyOpen(true)
   }
 
   async function handleDeleteClass(classId: string, options?: { deleteSeries?: boolean }) {
@@ -253,6 +269,7 @@ function StudentProfileForm({
       onDeleteClass({ classId })
     }
     setSelectedClass(null)
+    setNotifyOpen(true)
   }
 
   return (
@@ -364,6 +381,22 @@ function StudentProfileForm({
           <TileField label="Since">
             <MonthYearPicker value={since} onChange={setSince} />
           </TileField>
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-2xl bg-muted p-4">
+          <span className="text-xs font-semibold tracking-wide text-primary uppercase">
+            Stroke ratings
+          </span>
+          <RatingSlider label="Forehand" value={forehandRating} onChange={setForehandRating} />
+          <RatingSlider label="Backhand" value={backhandRating} onChange={setBackhandRating} />
+          <RatingSlider
+            label="Backhand slice"
+            value={backhandSliceRating}
+            onChange={setBackhandSliceRating}
+          />
+          <RatingSlider label="Volley" value={volleyRating} onChange={setVolleyRating} />
+          <RatingSlider label="Serve" value={serveRating} onChange={setServeRating} />
+          <RatingSlider label="Drop-shot" value={dropShotRating} onChange={setDropShotRating} />
         </div>
 
         <div className="flex flex-col gap-1.5 rounded-2xl bg-muted p-4">
@@ -518,6 +551,8 @@ function StudentProfileForm({
         onSave={handleSaveClass}
         onDelete={handleDeleteClass}
       />
+
+      <NotifyDialog open={notifyOpen} onOpenChange={setNotifyOpen} />
     </>
   )
 }
@@ -599,6 +634,32 @@ function TileField({ label, children }: { label: string; children: React.ReactNo
         {label}
       </span>
       {children}
+    </div>
+  )
+}
+
+function RatingSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-28 shrink-0 text-sm text-foreground">{label}</span>
+      <Slider
+        value={[value]}
+        onValueChange={(next) => onChange(Array.isArray(next) ? next[0] : next)}
+        min={0}
+        max={100}
+        step={1}
+        className="flex-1"
+        aria-label={label}
+      />
+      <span className="w-8 shrink-0 text-right text-sm font-medium text-foreground">{value}</span>
     </div>
   )
 }

@@ -62,32 +62,55 @@ schedule (see "Known gaps" below).
 
 ---
 
-## 2. Preventing double-booking a student
+## 2. Preventing double-booking a student, and a coach
 
 **The problem:** a shared student could get booked by two different coaches
 (or the same coach twice) at overlapping times, with nothing stopping it.
+Once students could self-book with any coach (see section 8), the mirror
+problem became just as real: two different students independently booking
+the *same coach* at overlapping times, with nothing stopping that either —
+this was actually a latent gap even before student booking existed (a coach
+could always have accidentally double-booked themselves across two
+students), it just became far more likely once bookings could come from
+independent, mutually-invisible callers.
 
-**The fix has two layers:**
+**Both directions get the same two-layer fix, applied twice — once keyed on
+`student_id`, once keyed on `coach_id`:**
 1. **A hard rule inside the database** (an "exclusion constraint" on
    `classes`): Postgres itself refuses to store two rows for the same
-   student with overlapping start/end times, no matter which coach or which
-   code path tries to insert them. This is the real guarantee — it can't be
-   bypassed by a bug in our app code.
-2. **A friendly pre-check** (`check_student_conflict`, a database function):
-   before saving, our server code asks "is this student free at this time?"
-   and if not, shows a specific message naming the conflicting coach and
-   time, instead of a raw database error. Because this needs to look across
-   *every* coach's classes (not just the signed-in coach's), and normal
-   queries can't see other coaches' rows, this function runs with a special
-   "security definer" permission — narrowly scoped to answering just this
-   one yes/no question, nothing else.
+   student — or, separately, for the same coach — with overlapping
+   start/end times, no matter which caller or which code path tries to
+   insert them. This is the real guarantee — it can't be bypassed by a bug
+   in our app code. (`classes_no_student_overlap` and
+   `classes_no_coach_overlap`.)
+2. **A friendly pre-check** (`check_student_conflict` / `check_coach_conflict`,
+   database functions): before saving, our server code asks "is this student
+   free at this time?" and "is this coach free at this time?", and if not,
+   shows a specific message naming the conflicting party and time, instead of
+   a raw database error. Because these need to look across *every* coach's
+   classes (not just the signed-in coach's), and normal queries can't see
+   other coaches' rows, both functions run with a special "security definer"
+   permission — narrowly scoped to answering just this one yes/no question,
+   nothing else. `check_student_conflict` additionally guards against a
+   student caller probing an *unrelated* student's schedule: a student only
+   gets a real answer when checking their own `student_id`.
+   `check_coach_conflict` needs no such guard — a coach's schedule isn't
+   private the way another student's is, so any caller checking any coach's
+   id is a legitimate, non-snooping use.
 
-**Front-end connection:** `src/lib/actions/classes.ts` — every place a class
-gets created or edited (`createClass`, `createClassSeries`,
-`updateClassSeries`, `updateClassInstance`) calls this check first. If it
-finds a conflict, the booking dialog (`src/components/calendar/
-class-edit-dialog.tsx`) shows the message as ordinary red form-error text —
-no special UI was needed, since that error-display plumbing already existed.
+**Front-end connection:** `src/lib/actions/class-shared.ts` holds both
+`assertNoStudentConflict` and `assertNoCoachConflict` (extracted out of
+`src/lib/actions/classes.ts` so the student-facing actions in
+`src/lib/actions/student-classes.ts`, see section 8, could import them
+too — a `"use server"` file can only export async functions, so the shared
+helpers had to move to a plain module). Every place a class gets created or
+edited, on both the coach side (`createClass`, `createClassSeries`,
+`updateClassSeries`, `updateClassInstance`) and the student side
+(`createStudentClass`, `createStudentClassSeries`, `updateStudentClassSeries`,
+`updateStudentClassInstance`), calls *both* checks before writing. If either
+finds a conflict, the booking dialog shows the message as ordinary red
+form-error text — no special UI was needed, since that error-display
+plumbing already existed.
 
 ---
 
@@ -174,25 +197,34 @@ if you ever see a public, pre-login page "not working" (redirecting to
 
 ---
 
-## 5. What a linked student can actually see (RLS)
+## 5. What a linked student can actually see and do (RLS)
 
 A student account can:
 - Read their **own** single row in `students` (not anyone else's).
 - Read their **own** classes in `classes` — matched by which student record
-  they're linked to, across **every coach** (not just one), since that's
-  what a future "see my whole schedule" feature needs.
+  they're linked to, across **every coach**, not just one.
+- **Book, edit, and delete their own classes and recurring series** — see
+  section 8. This closes the gap noted in earlier revisions of this doc
+  ("actual booking is future work") — it's now built.
+- Read `class_series` rows where they're the student — needed so the
+  student booking dialog can hydrate "whole series" edit fields, the
+  student-side equivalent of `getClassSeriesMeta`.
+- Read the shared `locations` roster, the club-wide coach directory
+  (`profiles` where `role = 'coach'`), and every coach's materialized
+  `coach_availability_blocks` — see sections 8-9.
 
-A student account **cannot** (in this phase):
-- Write to `students`, `locations`, `classes`, or `class_series` at all —
-  no editing their own profile, no booking, nothing yet. That's intentional
-  — this phase only had to prove login + linking + read access work safely;
-  actual booking is future work (see below).
-- See `class_series` (the recurrence rules) — they only see individual
-  class instances, which is all a student needs.
+A student account still **cannot** (unchanged from earlier phases):
+- Edit their own `students` row (level, notes, racket type, etc. remain
+  coach-write-only) — **except** the 6 stroke-strength rating columns, which
+  are also coach-write-only, not student-editable either (see section 10).
+- See `coach_availability_series` (the recurrence rules behind working-hours
+  blocks) — only the materialized instances, mirroring how `class_series`
+  itself stays hidden from the *coach* cross-visibility feature too.
 
-**Front-end connection:** nothing yet reads these student-facing policies
-from the frontend — there's no student Dashboard or Calendar built. This is
-groundwork for that future work, verified directly against the database.
+**Front-end connection:** `src/app/student/page.tsx` (Student Home) and
+`src/app/student/calendar/page.tsx` (Student Calendar) are the first real
+consumers of all of this — previously nothing read these policies from the
+frontend at all.
 
 ---
 
@@ -270,25 +302,117 @@ hours" toggle layer.
 
 ---
 
+## 8. Student self-booking
+
+A student can now book, edit, and delete their own classes — one-off or
+recurring — with a coach of their choosing, immediately (no coach-approval
+step), the same way a coach's own booking flow works.
+
+**Why a parallel actions file instead of relaxing the existing one:**
+`src/lib/actions/classes.ts` bakes in "the caller is a coach" at every level
+— `coach_id` is always the caller's own id, `student_id` is whichever
+student they pick, and every write is filtered `.eq("coach_id", coachId)`.
+A student caller inverts that: `student_id` must be the caller (server-derived
+from `requireStudent()`, **never** trusted from client input), and `coach_id`
+is the client-chosen value. Rather than branching the existing functions on
+caller role, `src/lib/actions/student-classes.ts` is a parallel file —
+`createStudentClass`, `createStudentClassSeries`, `getStudentClassSeriesMeta`,
+`updateStudentClassInstance`, `updateStudentClassSeries`,
+`deleteStudentClassInstance`, `deleteStudentClassSeries` — whose writes/reads
+filter by `.eq("student_id", studentId)` instead of `coach_id`, so a student
+can act on **any** class or series where they're the student, including ones
+a coach booked for them, matching the same "act on it regardless of who
+created it" model the coach side already has for their own bookings.
+
+**RLS:** new policies mirroring the existing coach-private shape but keyed
+on `student_id` matching the caller's linked row —
+`classes_insert_own_as_student` / `_update_own_as_student` /
+`_delete_own_as_student`, and the equivalent four ops on `class_series`
+(which had **zero** student policies before this — fully coach-private,
+since no student-facing feature had ever needed it).
+
+**A residual gap, mitigated at the app layer, not the DB:** `classes.coach_id`
+only has a foreign key to `auth.users(id)` — it proves the id belongs to
+*some* signed-up user, not specifically a coach. A crafted request could try
+passing another student's id as `coachId`. `student-classes.ts`'s
+`assertValidCoach()` helper checks `profiles.role = 'coach'` for the chosen
+id before writing, closing that gap without a fragile cross-table CHECK
+constraint.
+
+**Front-end connection:** `src/components/calendar/student-class-edit-dialog.tsx`
+(a fork of `class-edit-dialog.tsx` with a coach-picker instead of a
+student-picker — the emitted payload shape inverts too, so making one
+component generic over both was a bigger change than duplicating it) and
+`src/components/calendar/student-calendar.tsx` / `src/components/
+student-next-class-card.tsx` / `src/components/student-add-class-button.tsx`.
+
+## 9. Student read access to coaches and working hours
+
+Students can now read the shared `locations` roster, the coach directory
+(`profiles` where `role = 'coach'`), and every coach's materialized
+`coach_availability_blocks` — all club-wide, read-only. This is what powers
+the coach-picker in the booking dialog and the Student Calendar's "Coaches'
+working hours" toggle.
+
+**Why `locations` needed a new policy at all:** it turned out `locations`
+had **zero** student-select policy before this change (only
+`locations_select_coach`, gated `is_coach()`) — a student calling the
+roster query would have silently gotten nothing back. `locations_select_student`
+(`is_student()`) closes that.
+
+`coach_availability_blocks_select_student` and
+`profiles_select_student_directory` mirror the equivalent coach-facing
+policies from section 6/7. As with the coach cross-visibility feature,
+`coach_availability_series` (the recurrence rules) is deliberately **not**
+exposed to students — only the materialized blocks, which is all the
+read-only toggle needs.
+
+**Front-end connection:** `getLocationsForStudent()`, `getCoachesForStudent()`,
+and `getAvailabilityBlocksForStudent()` in `src/lib/queries/*` — parallel,
+`requireStudent()`-gated versions of the existing coach query functions,
+following this codebase's established "own auth-check function per caller
+role" convention rather than one function branching internally.
+
+## 10. Coach-set stroke ratings
+
+`students` gained 6 columns — `forehand_rating`, `backhand_rating`,
+`backhand_slice_rating`, `volley_rating`, `serve_rating`, `drop_shot_rating`
+— each a `smallint`, `0`-`100`, defaulting to `0`. These feed the Student
+Home dashboard's radar chart.
+
+**Why no RLS change was needed:** these are just new columns on an
+already-coach-writable, already-student-readable table — the existing
+`students_update_coach` (coach-only write) and `students_select_own_linked`
+/ `students_select_coach` (read) policies already cover them.
+
+**Front-end connection:** the coach edits these from the existing student
+profile dialog (`src/components/students/student-profile-dialog.tsx`, six
+new `Slider` controls), and the student sees them read-only via
+`src/components/stroke-radar-chart.tsx` on their own Home dashboard.
+
+---
+
 ## Known gaps / deliberately deferred
 
 These are documented so nobody re-discovers them as "surprises" later:
 
-- **No student Dashboard or Calendar UI yet.** `/student` is a placeholder.
-- **No student-facing cross-coach visibility.** Coaches can now see other
-  coaches' classes and working hours (section 6); a student cannot see any
-  of this yet — that's the next planned phase, and the RLS/query/type shapes
-  above were built to be reused by it directly.
 - **"Open Class" (letting other students join a class) isn't built.**
   `classes` today is strictly one row per student — there's no table for
   "multiple students in one class" yet. Building it will also require
-  reworking the double-booking exclusion constraint (section 2), since that
-  constraint currently assumes exactly one student per class row.
+  reworking both double-booking exclusion constraints (section 2), since
+  they currently assume exactly one student and one coach per class row.
 - **No automated invite emails.** A coach gets a link to copy/send manually.
 - **One login can only ever link to one student record** — no support yet
   for a parent/guardian account managing multiple kids.
-- **A student can't edit their own profile fields** (level, notes, etc.) —
-  read-only for now.
+- **A student can't edit their own profile fields** (level, notes, stroke
+  ratings, etc.) — all remain coach-write-only.
+- **No coach-approval step for student self-booking.** A student's booking
+  writes straight through, gated only by RLS and the same conflict checks a
+  coach's own booking goes through — there's no pending/unconfirmed state.
+- **The in-app "notify" reminder dialog is a manual UI nudge, not a real
+  notification system.** It doesn't message anyone — it just reminds
+  whoever is looking at the screen after an edit/delete to tell the other
+  party themselves.
 - **Local dev note:** this Supabase project's default email settings (email
   confirmation + a low send-rate limit) can make the *public* signup/invite
   form reject or rate-limit test email addresses when testing repeatedly in

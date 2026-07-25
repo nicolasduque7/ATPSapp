@@ -35,6 +35,12 @@ export interface Student {
   coachingNote?: string
   email?: string
   linked: boolean
+  forehandRating: number
+  backhandRating: number
+  backhandSliceRating: number
+  volleyRating: number
+  serveRating: number
+  dropShotRating: number
 }
 
 export interface ClassInstance {

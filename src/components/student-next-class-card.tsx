@@ -8,15 +8,21 @@ import { Avatar } from "@/components/avatar"
 import { Button } from "@/components/ui/button"
 import { NextClassCountdown } from "@/components/next-class-countdown"
 import { NotifyDialog } from "@/components/notify-dialog"
-import { ClassEditDialog } from "@/components/calendar/class-edit-dialog"
+import { StudentClassEditDialog } from "@/components/calendar/student-class-edit-dialog"
 import { mapClassInstanceToEvent } from "@/components/calendar/map-class-instance"
-import { deleteClassInstance, deleteClassSeries, updateClassInstance, updateClassSeries } from "@/lib/actions/classes"
-import type { CalendarClassEvent, ClassFormSubmission } from "@/components/calendar/types"
-import type { ClassInstance, Location, Student } from "@/lib/mock-data"
+import {
+  deleteStudentClassInstance,
+  deleteStudentClassSeries,
+  updateStudentClassInstance,
+  updateStudentClassSeries,
+} from "@/lib/actions/student-classes"
+import type { CalendarClassEvent, StudentClassFormSubmission } from "@/components/calendar/types"
+import type { ClassInstance, Coach, Location, Student } from "@/lib/mock-data"
 
-interface NextClassCardProps {
+interface StudentNextClassCardProps {
   nextClass: ClassInstance | undefined
-  students: Student[]
+  studentProfile: Student
+  coaches: Coach[]
   locations: Location[]
 }
 
@@ -46,26 +52,31 @@ function formatDayLabel(date: Date): string {
   }).format(date)
 }
 
-export function NextClassCard({ nextClass, students, locations }: NextClassCardProps) {
+export function StudentNextClassCard({
+  nextClass,
+  studentProfile,
+  coaches,
+  locations,
+}: StudentNextClassCardProps) {
   const router = useRouter()
   const [editingEvent, setEditingEvent] = useState<CalendarClassEvent | null>(null)
   const [notifyOpen, setNotifyOpen] = useState(false)
 
-  const student = nextClass ? students.find((s) => s.id === nextClass.studentId) : undefined
+  const coach = nextClass ? coaches.find((c) => c.id === nextClass.coachId) : undefined
   const location = nextClass ? locations.find((l) => l.id === nextClass.locationId) : undefined
 
   function handleOpenEdit() {
     if (!nextClass) return
-    const event = mapClassInstanceToEvent(nextClass, students, locations)
+    const event = mapClassInstanceToEvent(nextClass, [studentProfile], locations, coaches)
     if (event) setEditingEvent(event)
   }
 
-  async function handleSave(submission: ClassFormSubmission) {
+  async function handleSave(submission: StudentClassFormSubmission) {
     if (submission.kind === "instance-edit") {
       if (!editingEvent) return
-      await updateClassInstance(editingEvent.id, submission.input)
+      await updateStudentClassInstance(editingEvent.id, submission.input)
     } else if (submission.kind === "series-edit") {
-      await updateClassSeries(submission.seriesId, submission.input)
+      await updateStudentClassSeries(submission.seriesId, submission.input)
     }
     setNotifyOpen(true)
     router.refresh()
@@ -73,9 +84,9 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
 
   async function handleDelete(eventId: string, options?: { deleteSeries?: boolean }) {
     if (options?.deleteSeries && editingEvent?.resource.seriesId) {
-      await deleteClassSeries(editingEvent.resource.seriesId)
+      await deleteStudentClassSeries(editingEvent.resource.seriesId)
     } else {
-      await deleteClassInstance(eventId)
+      await deleteStudentClassInstance(eventId)
     }
     setEditingEvent(null)
     setNotifyOpen(true)
@@ -100,13 +111,13 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
             </p>
           </div>
 
-          {student && (
+          {coach && (
             <div className="mt-4 flex items-center gap-3">
-              <Avatar name={student.name} className="bg-primary-foreground/15 text-primary-foreground" />
+              <Avatar name={coach.name} className="bg-primary-foreground/15 text-primary-foreground" />
               <div className="flex flex-1 flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-heading text-sm font-bold text-primary-foreground">
-                    {student.name}
+                    {coach.name}
                   </span>
                   <Button
                     type="button"
@@ -125,9 +136,6 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
                       {location.name}
                     </span>
                   )}
-                  <span className="inline-flex w-fit items-center rounded-full bg-primary-foreground/15 px-2 py-0.5 text-[9px] font-medium text-primary-foreground/90">
-                    {student.level}
-                  </span>
                 </div>
               </div>
             </div>
@@ -137,10 +145,10 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
         <p className="mt-2 text-lg font-semibold">Nothing scheduled — enjoy the break.</p>
       )}
 
-      <ClassEditDialog
+      <StudentClassEditDialog
         event={editingEvent}
         mode="edit"
-        students={students}
+        coaches={coaches}
         locations={locations}
         onOpenChange={(open) => {
           if (!open) setEditingEvent(null)

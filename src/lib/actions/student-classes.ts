@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requireCoachId } from "@/lib/auth";
+import { requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
   addMinutes,
@@ -22,9 +22,31 @@ import {
   buildInstanceRows,
   isExclusionViolation,
 } from "@/lib/actions/class-shared";
+import type { ClassSeriesMeta } from "@/lib/actions/classes";
 
-export interface ClassInstanceInput {
-  studentId: string;
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+// `coach_id references auth.users(id)` only proves the id belongs to SOME
+// signed-up user, not specifically a coach — a crafted request could pass
+// another student's id. This is the app-layer check that closes that gap
+// (a DB-level cross-table CHECK constraint would be fragile/awkward here).
+async function assertValidCoach(supabase: SupabaseServerClient, coachId: string): Promise<void> {
+  const { data } = await supabase.from("profiles").select("id").eq("id", coachId).eq("role", "coach").maybeSingle();
+  if (!data) {
+    throw new Error("Please choose a valid coach.");
+  }
+}
+
+function revalidateAll(): void {
+  revalidatePath("/student");
+  revalidatePath("/student/calendar");
+  revalidatePath("/");
+  revalidatePath("/students");
+  revalidatePath("/calendar");
+}
+
+export interface StudentClassInstanceInput {
+  coachId: string;
   locationId: string;
   type: ClassType;
   startTime: Date;
@@ -32,25 +54,22 @@ export interface ClassInstanceInput {
   durationMinutes: number;
 }
 
-export interface ClassSeriesInput {
-  studentId: string;
+export interface StudentClassSeriesInput {
+  coachId: string;
   locationId: string;
   type: ClassType;
   frequency: SeriesFrequency;
   intervalCount: number;
-  weekdays?: number[] | null; // required (non-empty) when frequency === "Weekly"
-  dayOfMonth?: number | null; // required when frequency === "Monthly", 1-30
+  weekdays?: number[] | null;
+  dayOfMonth?: number | null;
   startDate: Date;
   startTime: string; // "HH:mm"
   durationMinutes: number;
   endDate: Date;
 }
 
-// Frequency is intentionally absent — it's locked at creation. The action
-// re-reads it from the DB after updating so a crafted request can't change
-// it via this path either.
-export interface ClassSeriesUpdateInput {
-  studentId: string;
+export interface StudentClassSeriesUpdateInput {
+  coachId: string;
   locationId: string;
   type: ClassType;
   intervalCount: number;
@@ -61,18 +80,19 @@ export interface ClassSeriesUpdateInput {
   endDate: Date;
 }
 
-export async function createClass(input: ClassInstanceInput): Promise<ClassInstance> {
-  const coachId = await requireCoachId();
+export async function createStudentClass(input: StudentClassInstanceInput): Promise<ClassInstance> {
+  const { studentId } = await requireStudent();
   const supabase = await createClient();
 
-  await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime);
-  await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime);
+  await assertValidCoach(supabase, input.coachId);
+  await assertNoStudentConflict(supabase, studentId, input.startTime, input.endTime);
+  await assertNoCoachConflict(supabase, input.coachId, input.startTime, input.endTime);
 
   const { data, error } = await supabase
     .from("classes")
     .insert({
-      coach_id: coachId,
-      student_id: input.studentId,
+      coach_id: input.coachId,
+      student_id: studentId,
       location_id: input.locationId,
       class_type: input.type,
       start_time: toLocalTimestamp(input.startTime),
@@ -83,23 +103,23 @@ export async function createClass(input: ClassInstanceInput): Promise<ClassInsta
     .single();
 
   if (error) {
-    console.error("createClass failed:", error);
+    console.error("createStudentClass failed:", error);
     throw new Error(
       isExclusionViolation(error)
         ? "That time was just taken — please try again."
-        : "Couldn't create the class. Try again.",
+        : "Couldn't book the class. Try again.",
     );
   }
 
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
+  revalidateAll();
   return mapClassRow(data);
 }
 
-export async function createClassSeries(input: ClassSeriesInput): Promise<ClassInstance[]> {
-  const coachId = await requireCoachId();
+export async function createStudentClassSeries(input: StudentClassSeriesInput): Promise<ClassInstance[]> {
+  const { studentId } = await requireStudent();
   const supabase = await createClient();
+
+  await assertValidCoach(supabase, input.coachId);
 
   if (input.endDate < input.startDate) {
     throw new Error("Until date must be on or after the start date.");
@@ -125,15 +145,15 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<ClassI
   for (const day of occurrences) {
     const startTime = combineDateAndTime(day, input.startTime);
     const endTime = addMinutes(startTime, input.durationMinutes);
-    await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
-    await assertNoCoachConflict(supabase, coachId, startTime, endTime);
+    await assertNoStudentConflict(supabase, studentId, startTime, endTime);
+    await assertNoCoachConflict(supabase, input.coachId, startTime, endTime);
   }
 
   const { data: series, error: seriesError } = await supabase
     .from("class_series")
     .insert({
-      coach_id: coachId,
-      student_id: input.studentId,
+      coach_id: input.coachId,
+      student_id: studentId,
       location_id: input.locationId,
       class_type: input.type,
       frequency: input.frequency,
@@ -149,44 +169,45 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<ClassI
     .single();
 
   if (seriesError) {
-    console.error("createClassSeries failed:", seriesError);
-    throw new Error("Couldn't create the recurring series. Try again.");
+    console.error("createStudentClassSeries failed:", seriesError);
+    throw new Error("Couldn't book the recurring series. Try again.");
   }
 
-  const rows = buildInstanceRows(occurrences, series.id, coachId, input.studentId, input);
+  const rows = buildInstanceRows(occurrences, series.id, input.coachId, studentId, input);
   const { data, error } = await supabase.from("classes").insert(rows).select(CLASS_COLUMNS);
 
   if (error) {
-    console.error("createClassSeries instances failed:", error);
+    console.error("createStudentClassSeries instances failed:", error);
     await supabase.from("class_series").delete().eq("id", series.id);
     throw new Error(
       isExclusionViolation(error)
         ? "One of these classes' times was just taken — please try again."
-        : "Couldn't create the recurring series. Try again.",
+        : "Couldn't book the recurring series. Try again.",
     );
   }
 
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
+  revalidateAll();
   return (data ?? []).map((row) => mapClassRow(row));
 }
 
 // Updates the series definition and regenerates its future (not-yet-started)
-// instances to match; past/completed instances are left untouched so
-// historical records (and the hours-coached stat) stay accurate.
-export async function updateClassSeries(
+// instances to match; past/completed instances are left untouched — mirrors
+// updateClassSeries exactly, just filtered by student_id instead of
+// coach_id so a student can edit a series regardless of which coach owns it.
+export async function updateStudentClassSeries(
   seriesId: string,
-  input: ClassSeriesUpdateInput,
+  input: StudentClassSeriesUpdateInput,
 ): Promise<ClassInstance[]> {
-  const coachId = await requireCoachId();
+  const { studentId } = await requireStudent();
   const supabase = await createClient();
   const now = new Date();
+
+  await assertValidCoach(supabase, input.coachId);
 
   const { data: updatedSeries, error: seriesError } = await supabase
     .from("class_series")
     .update({
-      student_id: input.studentId,
+      coach_id: input.coachId,
       location_id: input.locationId,
       class_type: input.type,
       interval_count: input.intervalCount,
@@ -197,12 +218,12 @@ export async function updateClassSeries(
       end_date: formatDateOnly(input.endDate),
     })
     .eq("id", seriesId)
-    .eq("coach_id", coachId)
+    .eq("student_id", studentId)
     .select("frequency")
     .single();
 
   if (seriesError) {
-    console.error("updateClassSeries failed:", seriesError);
+    console.error("updateStudentClassSeries failed:", seriesError);
     throw new Error("Couldn't save the series. Try again.");
   }
 
@@ -210,11 +231,11 @@ export async function updateClassSeries(
     .from("classes")
     .delete()
     .eq("series_id", seriesId)
-    .eq("coach_id", coachId)
+    .eq("student_id", studentId)
     .gt("start_time", toLocalTimestamp(now));
 
   if (deleteError) {
-    console.error("updateClassSeries (clearing future instances) failed:", deleteError);
+    console.error("updateStudentClassSeries (clearing future instances) failed:", deleteError);
     throw new Error("Couldn't save the series. Try again.");
   }
 
@@ -229,19 +250,17 @@ export async function updateClassSeries(
   );
 
   if (occurrences.length > 0) {
-    // The old future instances of this series were already deleted above,
-    // so this only ever flags a genuine conflict with a DIFFERENT booking.
     for (const day of occurrences) {
       const startTime = combineDateAndTime(day, input.startTime);
       const endTime = addMinutes(startTime, input.durationMinutes);
-      await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
-      await assertNoCoachConflict(supabase, coachId, startTime, endTime);
+      await assertNoStudentConflict(supabase, studentId, startTime, endTime);
+      await assertNoCoachConflict(supabase, input.coachId, startTime, endTime);
     }
 
-    const rows = buildInstanceRows(occurrences, seriesId, coachId, input.studentId, input);
+    const rows = buildInstanceRows(occurrences, seriesId, input.coachId, studentId, input);
     const { error: insertError } = await supabase.from("classes").insert(rows);
     if (insertError) {
-      console.error("updateClassSeries (inserting future instances) failed:", insertError);
+      console.error("updateStudentClassSeries (inserting future instances) failed:", insertError);
       throw new Error(
         isExclusionViolation(insertError)
           ? "One of these classes' times was just taken — please try again."
@@ -254,46 +273,34 @@ export async function updateClassSeries(
     .from("classes")
     .select(CLASS_COLUMNS)
     .eq("series_id", seriesId)
-    .eq("coach_id", coachId)
+    .eq("student_id", studentId)
     .order("start_time");
 
   if (error) {
-    console.error("updateClassSeries (refetch) failed:", error);
+    console.error("updateStudentClassSeries (refetch) failed:", error);
     throw new Error("Couldn't refresh the series. Try again.");
   }
 
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
+  revalidateAll();
   return (data ?? []).map((row) => mapClassRow(row, new Date(row.end_time) < now));
 }
 
-export interface ClassSeriesMeta {
-  frequency: SeriesFrequency;
-  intervalCount: number;
-  weekdays: number[] | null;
-  dayOfMonth: number | null;
-  startTime: string; // "HH:mm"
-  durationMinutes: number;
-  endDate: Date;
-}
-
-// Lets the edit dialog lazily load the authoritative recurrence pattern
-// when a coach switches to "whole series" scope, rather than guessing it
-// from the single instance they clicked.
-export async function getClassSeriesMeta(seriesId: string): Promise<ClassSeriesMeta> {
-  const coachId = await requireCoachId();
+// Student-side equivalent of getClassSeriesMeta, filtered by student_id so a
+// student can hydrate "whole series" edit fields regardless of which coach
+// owns the series.
+export async function getStudentClassSeriesMeta(seriesId: string): Promise<ClassSeriesMeta> {
+  const { studentId } = await requireStudent();
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("class_series")
     .select("frequency, interval_count, weekdays, day_of_month, start_time, duration_minutes, end_date")
     .eq("id", seriesId)
-    .eq("coach_id", coachId)
+    .eq("student_id", studentId)
     .single();
 
   if (error) {
-    console.error("getClassSeriesMeta failed:", error);
+    console.error("getStudentClassSeriesMeta failed:", error);
     throw new Error("Couldn't load the series. Try again.");
   }
 
@@ -308,20 +315,21 @@ export async function getClassSeriesMeta(seriesId: string): Promise<ClassSeriesM
   };
 }
 
-export async function updateClassInstance(
+export async function updateStudentClassInstance(
   id: string,
-  input: ClassInstanceInput,
+  input: StudentClassInstanceInput,
 ): Promise<ClassInstance> {
-  const coachId = await requireCoachId();
+  const { studentId } = await requireStudent();
   const supabase = await createClient();
 
-  await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime, id);
-  await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime, id);
+  await assertValidCoach(supabase, input.coachId);
+  await assertNoStudentConflict(supabase, studentId, input.startTime, input.endTime, id);
+  await assertNoCoachConflict(supabase, input.coachId, input.startTime, input.endTime, id);
 
   const { data, error } = await supabase
     .from("classes")
     .update({
-      student_id: input.studentId,
+      coach_id: input.coachId,
       location_id: input.locationId,
       class_type: input.type,
       start_time: toLocalTimestamp(input.startTime),
@@ -329,12 +337,12 @@ export async function updateClassInstance(
       duration_minutes: input.durationMinutes,
     })
     .eq("id", id)
-    .eq("coach_id", coachId)
+    .eq("student_id", studentId)
     .select(CLASS_COLUMNS)
     .single();
 
   if (error) {
-    console.error("updateClassInstance failed:", error);
+    console.error("updateStudentClassInstance failed:", error);
     throw new Error(
       isExclusionViolation(error)
         ? "That time was just taken — please try again."
@@ -342,46 +350,38 @@ export async function updateClassInstance(
     );
   }
 
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
+  revalidateAll();
   return mapClassRow(data);
 }
 
-export async function deleteClassInstance(id: string): Promise<void> {
-  const coachId = await requireCoachId();
+export async function deleteStudentClassInstance(id: string): Promise<void> {
+  const { studentId } = await requireStudent();
   const supabase = await createClient();
 
-  const { error } = await supabase.from("classes").delete().eq("id", id).eq("coach_id", coachId);
+  const { error } = await supabase.from("classes").delete().eq("id", id).eq("student_id", studentId);
 
   if (error) {
-    console.error("deleteClassInstance failed:", error);
+    console.error("deleteStudentClassInstance failed:", error);
     throw new Error("Couldn't delete class. Try again.");
   }
 
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
+  revalidateAll();
 }
 
-// Deletes the recurring series and every instance it generated (past and
-// future) via the class_series -> classes cascade delete.
-export async function deleteClassSeries(seriesId: string): Promise<void> {
-  const coachId = await requireCoachId();
+export async function deleteStudentClassSeries(seriesId: string): Promise<void> {
+  const { studentId } = await requireStudent();
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("class_series")
     .delete()
     .eq("id", seriesId)
-    .eq("coach_id", coachId);
+    .eq("student_id", studentId);
 
   if (error) {
-    console.error("deleteClassSeries failed:", error);
+    console.error("deleteStudentClassSeries failed:", error);
     throw new Error("Couldn't delete the series. Try again.");
   }
 
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
+  revalidateAll();
 }
