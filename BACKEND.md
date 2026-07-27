@@ -392,15 +392,147 @@ new `Slider` controls), and the student sees them read-only via
 
 ---
 
+## 11. Open Class
+
+A class can be marked **Open** (with a capacity for extra joiners), letting
+other students discover it and request to join. This is a **per-instance**
+flag — `class_series` itself is untouched; a brand-new recurring series
+always generates plain Closed instances, and opening one happens by editing
+an individual generated instance afterward, exactly like any other
+single-instance edit.
+
+**Schema:** `classes` gained `is_open boolean default false` and
+`max_joiners smallint` (CHECK: `null` unless open, `>0` if set — capacity is
+**additional joiners only**, not counting the class's own student). A new
+`class_participants` table holds approved joiners (`class_id`, `student_id`,
+a denormalized `start_time`/`end_time` kept in sync by a trigger, `joined_at`,
+`unique(class_id, student_id)`). A new `class_join_requests` table tracks a
+student's request to join (`status: pending/approved/rejected`, a partial
+unique index allowing exactly one *pending* request per student per class —
+re-requesting after a rejection is allowed). A generic `notifications` table
+(see section 12) carries the request/decision events.
+
+**Why two tables, not one:** `classes.student_id` keeps meaning exactly what
+it always has (the one host) — `classes_no_student_overlap` and
+`classes_no_coach_overlap` (section 2's double-booking guarantees) needed
+**zero changes**. `class_participants` gets its own, symmetric GiST exclusion
+constraint (`class_participants_no_student_overlap`) so a joiner can't
+double-book against another Open Class they've joined. `check_student_conflict`
+(section 2) was extended with a second arm reading `class_participants`, so
+the existing friendly pre-check also sees a student's joined-class
+commitments, not just classes they host.
+
+**The one accepted gap:** a joiner double-booking against a class they
+personally *host* elsewhere is caught only by `decide_join_request`'s
+app-level re-check at approval time, not a hard cross-table DB constraint — a
+true guarantee there would need a materialized view/trigger scheme spanning
+two tables, which isn't worth it for v1. This is a narrower, more honest gap
+than earlier drafts of this doc suggested ("will require reworking both
+double-booking exclusion constraints") — those constraints didn't need to
+change at all.
+
+**Who can browse and request:** a widened `classes` SELECT policy
+(`classes_select_open_as_student`, additive to the existing own-classes
+policy) lets any student read classes flagged `is_open = true` club-wide.
+But a browsing student can't read another student's row via RLS at all
+(`students_select_own_linked` is self-only), so seeing a useful pill needs
+the host's name/level *before* any relationship exists between the two
+students — that's what `get_open_classes_for_student()` (a narrow SECURITY
+DEFINER function, same "expose only the display fields needed" pattern as
+`get_invite_preview`) is for. `request_to_join_class(class_id)` (also
+SECURITY DEFINER) resolves the caller's `student_id` server-side, validates
+the class is open/not-own/not-already-joined-or-pending/has room, inserts the
+request, and writes a `join_request_received` notification to the class's
+coach — **only** the coach, not the host student, per the product decision
+that a host only learns about a *decided* request, never a raw pending one.
+
+**Deciding a request:** `decide_join_request(request_id, approve)` (SECURITY
+DEFINER) is the only writer of `class_participants` and the only place a
+request's status changes. It re-validates capacity and conflicts (time may
+have passed since the request), and on approval: inserts the joiner, flips
+`classes.class_type` to `'Group'` (reusing the existing enum value — no new
+type needed), and writes `join_request_approved` (to the requester) and
+`class_joined` (to the host) notifications. On rejection, only
+`join_request_rejected` (to the requester) is written. The host notification
+is skipped entirely if that student has no linked login yet (`auth_user_id`
+is null) — inserting with a null `recipient_id` would otherwise fail the
+whole approval, since `notifications.recipient_id` is `not null`.
+
+**Reading a partner's profile for the Notifications UI:** two more narrow
+SECURITY DEFINER functions exist for exactly this, since `students` SELECT
+RLS still never lets one student read another's row directly (that table
+carries email/age/gender/coaching notes peers shouldn't see): the existing
+`get_class_partner_students(class_id)` (host sees every approved joiner, a
+joiner sees the host — post-approval only) plus, added for the student
+Notifications page specifically, `get_sent_join_requests_for_student()` /
+`get_sent_join_request_detail(request_id)` (a requester's own view of the
+host's card, at **any** status — pending/approved/rejected, unlike the
+approval-gated function above) and `get_received_joins_for_student()` (a
+host's list of who joined their classes — always approved, since that's the
+only way a row exists).
+
+**Front-end connection:** `src/components/calendar/recurrence-fields.tsx`'s
+`OpenClassField` (the shared Open/Closed toggle + capacity input, reused by
+both `class-edit-dialog.tsx` and `student-class-edit-dialog.tsx`);
+`src/components/calendar/student-calendar.tsx`'s "Other students' Open
+Classes" toggle and `open-class-view-dialog.tsx` (view + "Request to join");
+`src/app/(app)/notifications/` (coach decision page) and
+`src/app/student/notifications/` (student sent/received page), both under
+`src/components/notifications/`.
+
+## 12. Notifications
+
+A generic in-app notification table, deliberately **not** a normalized/
+typed-column design: `notifications(id, recipient_id, type text, payload
+jsonb, read_at, created_at)`. The concrete reason a jsonb payload is
+necessary, not just convenient — a *future* notification type (e.g. "this
+class was edited/deleted") must be able to describe a row that may no longer
+exist by the time it's rendered. A foreign-key-based design breaks exactly
+there; a self-contained payload doesn't. `type` is plain `text`, not an enum
+— adding a new notification type later needs no migration, just a new
+string, a payload shape, and a UI branch. Valid values as of this feature:
+`join_request_received`, `join_request_approved`, `join_request_rejected`,
+`class_joined`.
+
+**Write-only-via-function, same as `profiles`:** no insert/delete RLS policy
+for `authenticated` at all — every row is written by one of the SECURITY
+DEFINER functions in section 11, so a client can never forge a notification
+"from" someone else or write into someone else's inbox. `read_at` gets a
+plain client-side UPDATE policy scoped to `recipient_id = auth.uid()` (a
+low-risk, self-only field — no need to route "mark as read" through an RPC).
+
+**Role-agnostic by design:** `recipient_id` is just `auth.users.id`, and RLS
+already scopes to "your own inbox" regardless of role — `getUnreadNotificationCount()`
+and `markAllNotificationsRead()` in `src/lib/queries/notifications.ts` are
+one shared implementation used by both the coach and student sidebars,
+unlike most of this app's query layer, which forks per role.
+
+**Delivery is fetch-on-load, not realtime:** no Supabase Realtime
+subscriptions, no websockets. The unread badge (`NavItem`'s optional
+`badgeCount` prop) and the notification lists are fetched when a page
+renders or the user navigates — a deliberate v1 scope decision, and the app
+had no realtime infrastructure to build on anyway.
+
+**List content is a live query, not a `notifications` read:** the coach's
+pending-requests list and the student's "sent requests" list both query
+`class_join_requests` directly, not `notifications` rows — a request's
+status can change after its notification was written, and the list should
+always reflect current truth. `notifications` rows exist only to drive the
+unread badge and announce the async "something happened" events; every
+detail dialog re-fetches live data rather than trusting a payload snapshot.
+
+**Front-end connection:** `src/components/nav-item.tsx` (badge rendering),
+`src/components/sidebar.tsx` / `src/components/student-sidebar.tsx` (badge
+wiring), `src/components/notifications/*` (lists, status icons, partner
+cards, decision/detail dialogs), `src/lib/queries/notifications.ts`, and
+`src/lib/actions/join-requests.ts`.
+
+---
+
 ## Known gaps / deliberately deferred
 
 These are documented so nobody re-discovers them as "surprises" later:
 
-- **"Open Class" (letting other students join a class) isn't built.**
-  `classes` today is strictly one row per student — there's no table for
-  "multiple students in one class" yet. Building it will also require
-  reworking both double-booking exclusion constraints (section 2), since
-  they currently assume exactly one student and one coach per class row.
 - **No automated invite emails.** A coach gets a link to copy/send manually.
 - **One login can only ever link to one student record** — no support yet
   for a parent/guardian account managing multiple kids.
@@ -409,10 +541,21 @@ These are documented so nobody re-discovers them as "surprises" later:
 - **No coach-approval step for student self-booking.** A student's booking
   writes straight through, gated only by RLS and the same conflict checks a
   coach's own booking goes through — there's no pending/unconfirmed state.
-- **The in-app "notify" reminder dialog is a manual UI nudge, not a real
-  notification system.** It doesn't message anyone — it just reminds
-  whoever is looking at the screen after an edit/delete to tell the other
-  party themselves.
+- **A joiner double-booking against a class they personally host elsewhere
+  is only an app-level check, not a hard DB guarantee** — see section 11.
+  Same class of race-condition risk this codebase already accepts elsewhere
+  (the exclusion-constraint backstop pattern), just not fully closed here
+  since it's genuinely cross-table.
+- **A coach can't open/set capacity on a class at series-creation time** —
+  only per generated instance, after the fact. Opening a whole recurring
+  series means editing each instance individually.
+- **The in-app "notify" reminder dialog (`src/components/notify-dialog.tsx`)
+  is still a manual UI nudge, not a real notification, for edit/delete
+  actions** — unchanged by section 12's notification system, which only
+  covers Open Class join requests/decisions so far. Extending real
+  notifications to edit/delete is exactly the kind of future case section
+  12's generic `type`/`payload` design was built to absorb without a new
+  table.
 - **Local dev note:** this Supabase project's default email settings (email
   confirmation + a low send-rate limit) can make the *public* signup/invite
   form reject or rate-limit test email addresses when testing repeatedly in

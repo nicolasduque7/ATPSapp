@@ -61,7 +61,27 @@ coach, since a student's classes legitimately span multiple coaches). A
 "Coaches' working hours" toggle overlays coaches' declared availability,
 read-only — clicking a working-hours block does nothing, only class events
 open the edit dialog. The "+" button opens the same booking dialog as
-Student Home, with a coach-picker instead of a student-picker.
+Student Home, with a coach-picker instead of a student-picker. A second
+toggle, "Other students' Open Classes," shows other students' classes that
+have been marked Open (see "Open Class" below) as a distinct, dashed pill;
+clicking one opens a read-only summary (student, coach, court, start/end,
+level) with a "Request to join" button — the only class event on this
+calendar that isn't the viewing student's own.
+
+### Notifications (coach)
+At `/notifications`, with a bell icon + unread-count badge in the sidebar.
+Shows a "Student's Join Requests" list of pending Open Class join requests
+(requester name + class start/end); clicking one opens a read-only full
+detail popup with "Authorize this student to join the class?" and Yes/No.
+
+### Student Notifications
+At `/student/notifications`, with the same bell + badge pattern. Shows two
+directions under "Student's Join Requests": requests this student sent (any
+status — pending/approved/rejected, each with an icon), and students who
+joined this student's own classes (always approved, since a host is never
+notified of a still-pending request). Clicking an item opens class details
+(read-only text) plus a card for the other student (Name, Nickname, level,
+racket, and their stroke-rating radar chart).
 
 ## Scheduling model (IMPORTANT)
 Coaches can create TWO kinds of classes:
@@ -81,7 +101,16 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
   (1-30, Monthly only), start_time, duration, start_date, end_date (required)
 - Class (a single instance on the calendar — this is what the calendar reads):
   id, coach_id, student_id, location_id, series_id (nullable — null = one-off),
-  start_time, end_time, duration, completed (bool), [notes?]
+  start_time, end_time, duration, completed (bool), [notes?], is_open (bool,
+  default false), max_joiners (nullable, additional joiners only)
+- ClassParticipant (an approved Open Class joiner): id, class_id, student_id,
+  start_time/end_time (denormalized from the class, for double-booking
+  protection), joined_at
+- ClassJoinRequest (a student's request to join an Open Class): id, class_id,
+  requesting_student_id, status (pending/approved/rejected), created_at,
+  decided_at, decided_by
+- Notification (generic, any recipient/type): id, recipient_id, type (a
+  string, not a fixed enum), payload (flexible per type), read_at, created_at
 
 ## Resolved decisions
 - Recurring classes: YES, alongside one-off classes (see scheduling model).
@@ -128,16 +157,31 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
 - A small "Don't forget to notify the coach/student about these changes"
   reminder (warning icon, dismissible dialog) appears after editing or
   deleting a class, on both the coach and student interfaces. It's a manual
-  UI nudge, not an actual notification — see `BACKEND.md`'s known gaps.
+  UI nudge, not an actual notification, and is unrelated to the real
+  notification system below — see `BACKEND.md`'s known gaps.
+- "Open Class": a class can be marked Open, with a capacity for extra
+  joiners (additional joiners only, not counting the class's own student).
+  This is a **per-instance** toggle, not a series-level one — a brand-new
+  recurring series always generates plain Closed instances; opening one
+  means editing a generated instance afterward, the same as any other
+  single-instance edit. Settable by whoever can already edit that class (the
+  hosting coach, or the student themselves for their own classes) — no new
+  permission model. A student requests to join from the Student Calendar;
+  the request goes to the class's own coach only (not the host student) —
+  the host only learns about it once decided, via the real notification
+  system below. On approval, the class's type automatically flips to
+  'Group' and both students are notified; on rejection, only the requester
+  is. See `BACKEND.md` section 11 for the schema.
+- A real, generic in-app notification system (not the manual nudge above):
+  a bell icon + unread-count badge in both the coach and student sidebars,
+  fetched on page load/navigation (no realtime/websockets). Currently
+  covers Open Class join requests and decisions; built generically (a
+  `type` string + a flexible payload, not a bespoke table per kind) so
+  future notification types — e.g. an edit/delete alert — can be added
+  without a new migration. See `BACKEND.md` section 12.
 
 ## Planned (not yet built)
-- "Open Class": a class can be marked Open or Closed so other students can
-  join it. Scope already decided: any class type, coach-set capacity. This
-  needs a new multi-student-per-class data model (`classes` is currently
-  strictly one student per row) and a rework of both double-booking
-  exclusion constraints, which are keyed on `classes.student_id` and
-  `classes.coach_id` today. See `BACKEND.md` for the current schema this
-  has to build on.
+Nothing currently planned — this is where the next roadmap item goes.
 
 ## Non-goals (v1)
 - Payments, messaging, public booking page (later).
