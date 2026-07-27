@@ -1,8 +1,8 @@
 import { CoachJoinRequestsList } from "@/components/notifications/coach-join-requests-list";
-import { getPendingJoinRequestsForCoach } from "@/lib/queries/notifications";
+import { getPendingJoinRequestsForCoach, markAllNotificationsRead } from "@/lib/queries/notifications";
 
 export default async function NotificationsPage(): Promise<React.JSX.Element> {
-  const requests = await getPendingJoinRequestsForCoach();
+  const [requests] = await Promise.all([getPendingJoinRequestsForCoach(), markAllNotificationsRead()]);
 
   return (
     <div className="flex flex-col gap-4">
