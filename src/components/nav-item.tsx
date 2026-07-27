@@ -10,9 +10,10 @@ interface NavItemProps {
   href: string
   icon: ReactNode
   label: string
+  badgeCount?: number
 }
 
-export function NavItem({ href, icon, label }: NavItemProps) {
+export function NavItem({ href, icon, label, badgeCount }: NavItemProps) {
   const pathname = usePathname()
   const isActive = pathname === href
 
@@ -23,7 +24,7 @@ export function NavItem({ href, icon, label }: NavItemProps) {
       aria-label={label}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 outline-none",
+        "relative flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 outline-none",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
         isActive
           ? "bg-sidebar-primary text-sidebar-primary-foreground"
@@ -31,6 +32,11 @@ export function NavItem({ href, icon, label }: NavItemProps) {
       )}
     >
       {icon}
+      {!!badgeCount && badgeCount > 0 && (
+        <span className="absolute top-0 right-0 inline-flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-white">
+          {badgeCount > 9 ? "9+" : badgeCount}
+        </span>
+      )}
     </Link>
   )
 }
