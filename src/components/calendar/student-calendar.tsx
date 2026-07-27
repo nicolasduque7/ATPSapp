@@ -14,9 +14,11 @@ import { CoachFilterPopover } from "@/components/calendar/coach-filter-popover"
 import { CALENDAR_VIEWS, MAX_TIME, MIN_TIME, localizer } from "@/components/calendar/calendar-config"
 import { StudentClassEditDialog } from "@/components/calendar/student-class-edit-dialog"
 import { createDraftEvent } from "@/components/calendar/class-edit-dialog"
+import { OpenClassViewDialog } from "@/components/calendar/open-class-view-dialog"
 import { NotifyDialog } from "@/components/notify-dialog"
 import { mapClassInstanceToEvent } from "@/components/calendar/map-class-instance"
 import { getCoachAccentVar } from "@/lib/coach-colors"
+import { cn } from "@/lib/utils"
 import {
   createStudentClass,
   createStudentClassSeries,
@@ -36,6 +38,7 @@ import type { Coach, Location, Student } from "@/lib/mock-data"
 interface StudentCalendarProps {
   classEvents: CalendarEvent[]
   availabilityEvents: CalendarEvent[]
+  openClassEvents: CalendarEvent[]
   coaches: Coach[]
   locations: Location[]
   studentProfile: Student
@@ -44,6 +47,7 @@ interface StudentCalendarProps {
 export function StudentCalendar({
   classEvents: initialClassEvents,
   availabilityEvents: initialAvailabilityEvents,
+  openClassEvents,
   coaches,
   locations,
   studentProfile,
@@ -54,18 +58,21 @@ export function StudentCalendar({
   const [availabilityEvents] = useState(initialAvailabilityEvents)
   const [selectedEvent, setSelectedEvent] = useState<CalendarClassEvent | null>(null)
   const [creatingEvent, setCreatingEvent] = useState<CalendarClassEvent | null>(null)
+  const [openClassViewEvent, setOpenClassViewEvent] = useState<CalendarClassEvent | null>(null)
   const [visibleAvailabilityCoachIds, setVisibleAvailabilityCoachIds] = useState<Set<string>>(new Set())
+  const [showOpenClasses, setShowOpenClasses] = useState(false)
   const [notifyOpen, setNotifyOpen] = useState(false)
 
   // Every fetched class already IS the student's own (RLS guarantees it), so
-  // unlike the coach calendar there's no "other students' bookings" toggle —
-  // classes always show. Only working-hours blocks are gated by the toggle.
+  // unlike the coach calendar there's no "other students' bookings" toggle
+  // for classEvents itself — classes always show. Working-hours blocks and
+  // other students' Open Classes are each gated by their own toggle.
   const displayedEvents = useMemo(() => {
     const filteredAvailability = availabilityEvents.filter((event) =>
       visibleAvailabilityCoachIds.has(event.resource.coachId)
     )
-    return [...classEvents, ...filteredAvailability]
-  }, [classEvents, availabilityEvents, visibleAvailabilityCoachIds])
+    return [...classEvents, ...filteredAvailability, ...(showOpenClasses ? openClassEvents : [])]
+  }, [classEvents, availabilityEvents, visibleAvailabilityCoachIds, showOpenClasses, openClassEvents])
 
   // A student's classes legitimately span multiple coaches, so the
   // coach-name badge should always render — passing an id that can never
@@ -91,6 +98,9 @@ export function StudentCalendar({
         style: { "--event-accent": `var(${getCoachAccentVar(event.resource.coachId, coaches)})` } as React.CSSProperties,
       }
     }
+    if (event.resource.studentId !== studentProfile.id) {
+      return { className: "courtside-open-class-event" }
+    }
     return {}
   }
 
@@ -109,9 +119,16 @@ export function StudentCalendar({
 
   // Working-hours blocks are permanently read-only on the student calendar —
   // there's no valid "editable" case for them here, so this is
-  // unconditional rather than the coach calendar's ownership check.
+  // unconditional rather than the coach calendar's ownership check. A class
+  // event that isn't the student's own can only be another student's Open
+  // Class (that's the only thing openClassEvents ever contains), so it opens
+  // the read-only view+request dialog instead of the edit dialog.
   function handleSelectEvent(event: CalendarEvent) {
     if (event.kind !== "class") return
+    if (event.resource.studentId !== studentProfile.id) {
+      setOpenClassViewEvent(event)
+      return
+    }
     setSelectedEvent(event)
   }
 
@@ -203,6 +220,19 @@ export function StudentCalendar({
           onToggle={toggleAvailabilityCoach}
           emptyLabel="No coaches yet."
         />
+        <button
+          type="button"
+          aria-pressed={showOpenClasses}
+          onClick={() => setShowOpenClasses((prev) => !prev)}
+          className={cn(
+            "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-transparent px-3 py-1.5 text-xs font-medium transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+            showOpenClasses
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
+          )}
+        >
+          Other students&apos; Open Classes
+        </button>
       </div>
 
       {displayedEvents.length === 0 ? (
@@ -257,6 +287,13 @@ export function StudentCalendar({
           if (!open) setCreatingEvent(null)
         }}
         onSave={handleSave}
+      />
+
+      <OpenClassViewDialog
+        event={openClassViewEvent}
+        onOpenChange={(open) => {
+          if (!open) setOpenClassViewEvent(null)
+        }}
       />
 
       <NotifyDialog open={notifyOpen} onOpenChange={setNotifyOpen} />

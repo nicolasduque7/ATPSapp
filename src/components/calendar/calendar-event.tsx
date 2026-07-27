@@ -7,6 +7,7 @@ import { LevelBadge } from "@/components/level-badge"
 import { LocationTag } from "@/components/location-tag"
 import { ClassTypeTag } from "@/components/class-type-tag"
 import { RecurringTag } from "@/components/recurring-tag"
+import { OpenClassTag } from "@/components/open-class-tag"
 import { cn } from "@/lib/utils"
 import type { CalendarEvent } from "@/components/calendar/types"
 
@@ -53,7 +54,8 @@ function useTileHeight() {
 function ClassEventTile({ event, currentCoachId }: CoachAwareEventProps) {
   const { ref, height } = useTileHeight()
   if (event.kind !== "class") return null
-  const { coachId, coachName, studentName, level, locationName, durationMinutes, type, seriesId } = event.resource
+  const { coachId, coachName, studentName, level, locationName, durationMinutes, type, seriesId, isOpen } =
+    event.resource
   const isOwn = coachId === currentCoachId
 
   const showLocation = height === null || height >= 46
@@ -86,6 +88,9 @@ function ClassEventTile({ event, currentCoachId }: CoachAwareEventProps) {
           <ClassTypeTag type={type} className="px-1 py-0 text-[7px] leading-[1.4]" />
           {seriesId && (
             <RecurringTag className="gap-0.5 px-1 py-0 text-[7px] leading-[1.4]" iconClassName="size-2" />
+          )}
+          {isOpen && (
+            <OpenClassTag className="gap-0.5 px-1 py-0 text-[7px] leading-[1.4]" iconClassName="size-2" />
           )}
         </div>
       )}
@@ -137,11 +142,11 @@ export function CalendarEventTileCompact({ event, currentCoachId }: CoachAwareEv
     )
   }
 
-  const { coachId, coachName, studentName, level, locationName, durationMinutes } = event.resource
+  const { coachId, coachName, studentName, level, locationName, durationMinutes, isOpen } = event.resource
   const isOwn = coachId === currentCoachId
   const tooltip = `${formatTime(event.start)} – ${formatTime(event.end)} · ${formatDuration(
     durationMinutes
-  )}\n${studentName} · ${level}\n${locationName}${isOwn ? "" : `\n${coachName}`}`
+  )}\n${studentName} · ${level}\n${locationName}${isOwn ? "" : `\n${coachName}`}${isOpen ? "\nOpen Class" : ""}`
 
   return (
     <div title={tooltip} className="flex items-center gap-1 overflow-hidden text-xs">

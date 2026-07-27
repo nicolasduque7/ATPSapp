@@ -143,6 +143,24 @@
   border-left: 3px solid var(--event-accent);
 }
 
+/* Another student's Open Class, shown on the student Calendar's "Other
+   students' classes" toggle — tinted with the positive/available token
+   (matching OpenClassTag), distinct from any coach's own accent color. */
+.courtside-calendar .rbc-event.courtside-open-class-event {
+  background-color: color-mix(in oklch, var(--positive) 12%, transparent);
+  border: 1px dashed var(--positive);
+  border-left: 1px dashed var(--positive);
+}
+
+.courtside-calendar .rbc-event.courtside-open-class-event:hover {
+  background-color: color-mix(in oklch, var(--positive) 18%, transparent);
+}
+
+.courtside-calendar .rbc-day-slot .rbc-event.courtside-open-class-event,
+.courtside-calendar .rbc-day-slot .rbc-background-event.courtside-open-class-event {
+  border-left: 3px solid var(--positive);
+}
+
 .courtside-calendar .rbc-day-slot .rbc-event.courtside-availability-event,
 .courtside-calendar .rbc-day-slot .rbc-background-event.courtside-availability-event {
   border-left: 1px dashed var(--event-accent);

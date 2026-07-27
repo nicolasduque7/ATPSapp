@@ -1,4 +1,4 @@
-import { getStudentClasses } from "@/lib/queries/classes";
+import { getStudentClasses, getOpenClassesForStudent } from "@/lib/queries/classes";
 import { getLocationsForStudent } from "@/lib/queries/locations";
 import { getCoachesForStudent } from "@/lib/queries/coaches";
 import { getCurrentStudentProfile } from "@/lib/queries/students";
@@ -6,15 +6,17 @@ import { getAvailabilityBlocksForStudent } from "@/lib/queries/availability";
 import { StudentCalendar } from "@/components/calendar/student-calendar";
 import { mapClassInstanceToEvent } from "@/components/calendar/map-class-instance";
 import { mapAvailabilityBlockToEvent } from "@/components/calendar/map-availability-block";
+import { mapOpenClassToEvent } from "@/components/calendar/map-open-class";
 import type { CalendarEvent } from "@/components/calendar/types";
 
 export default async function StudentCalendarPage(): Promise<React.JSX.Element> {
-  const [profile, classes, locations, coaches, availabilityBlocks] = await Promise.all([
+  const [profile, classes, locations, coaches, availabilityBlocks, openClasses] = await Promise.all([
     getCurrentStudentProfile(),
     getStudentClasses(),
     getLocationsForStudent(),
     getCoachesForStudent(),
     getAvailabilityBlocksForStudent(),
+    getOpenClassesForStudent(),
   ]);
 
   const classEvents: CalendarEvent[] = classes.flatMap((c) => {
@@ -27,10 +29,16 @@ export default async function StudentCalendarPage(): Promise<React.JSX.Element> 
     ...mapAvailabilityBlockToEvent(block, coaches, locations),
   }));
 
+  const openClassEvents: CalendarEvent[] = openClasses.flatMap((openClass) => {
+    const event = mapOpenClassToEvent(openClass, locations);
+    return event ? [{ kind: "class" as const, ...event }] : [];
+  });
+
   return (
     <StudentCalendar
       classEvents={classEvents}
       availabilityEvents={availabilityEvents}
+      openClassEvents={openClassEvents}
       coaches={coaches}
       locations={locations}
       studentProfile={profile}
