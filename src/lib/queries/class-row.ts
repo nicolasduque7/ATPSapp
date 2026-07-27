@@ -1,7 +1,7 @@
 import type { ClassInstance, ClassType } from "@/lib/mock-data";
 
 export const CLASS_COLUMNS =
-  "id, coach_id, student_id, location_id, series_id, class_type, start_time, end_time, duration_minutes, notes" as const;
+  "id, coach_id, student_id, location_id, series_id, class_type, start_time, end_time, duration_minutes, notes, is_open, max_joiners" as const;
 
 export interface ClassRow {
   id: string;
@@ -14,6 +14,8 @@ export interface ClassRow {
   end_time: string;
   duration_minutes: number;
   notes: string | null;
+  is_open: boolean;
+  max_joiners: number | null;
 }
 
 export function mapClassRow(row: ClassRow, completed = false): ClassInstance {
@@ -29,5 +31,7 @@ export function mapClassRow(row: ClassRow, completed = false): ClassInstance {
     durationMinutes: row.duration_minutes,
     completed,
     notes: row.notes ?? undefined,
+    isOpen: row.is_open,
+    maxJoiners: row.max_joiners,
   };
 }

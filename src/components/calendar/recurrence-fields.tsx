@@ -2,6 +2,7 @@
 
 import { addDays as addCalendarDays, format } from "date-fns"
 
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import type { SeriesFrequency } from "@/lib/dates"
@@ -197,6 +198,56 @@ export function ReadOnlyField({ label, value, caption }: ReadOnlyFieldProps) {
         {value}
       </div>
       {caption && <span className="text-[0.7rem] text-muted-foreground">{caption}</span>}
+    </div>
+  )
+}
+
+interface OpenClassFieldProps {
+  isOpen: boolean
+  onIsOpenChange: (isOpen: boolean) => void
+  maxJoiners: number
+  onMaxJoinersChange: (maxJoiners: number) => void
+}
+
+// capacity means ADDITIONAL joiners only, on top of the class's own student
+// — see PROJECT.md's Open Class decisions.
+export function OpenClassField({
+  isOpen,
+  onIsOpenChange,
+  maxJoiners,
+  onMaxJoinersChange,
+}: OpenClassFieldProps) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">Open Class</span>
+      <div className="flex items-center gap-3">
+        <SegmentedToggle
+          ariaLabel="Open Class"
+          value={isOpen ? "open" : "closed"}
+          onChange={(value) => onIsOpenChange(value === "open")}
+          options={[
+            { value: "closed", label: "Closed" },
+            { value: "open", label: "Open" },
+          ]}
+        />
+        {isOpen && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Extra spots
+            <Input
+              type="number"
+              min={1}
+              value={maxJoiners}
+              onChange={(e) => onMaxJoinersChange(Math.max(1, Number(e.target.value) || 1))}
+              className="w-16"
+            />
+          </label>
+        )}
+      </div>
+      {isOpen && (
+        <span className="text-[0.7rem] text-muted-foreground">
+          Other students can request to join, on top of this class&apos;s own student.
+        </span>
+      )}
     </div>
   )
 }

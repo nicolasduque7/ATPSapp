@@ -30,6 +30,8 @@ export interface ClassInstanceInput {
   startTime: Date;
   endTime: Date;
   durationMinutes: number;
+  isOpen: boolean;
+  maxJoiners: number | null;
 }
 
 export interface ClassSeriesInput {
@@ -78,6 +80,8 @@ export async function createClass(input: ClassInstanceInput): Promise<ClassInsta
       start_time: toLocalTimestamp(input.startTime),
       end_time: toLocalTimestamp(input.endTime),
       duration_minutes: input.durationMinutes,
+      is_open: input.isOpen,
+      max_joiners: input.isOpen ? input.maxJoiners : null,
     })
     .select(CLASS_COLUMNS)
     .single();
@@ -327,6 +331,8 @@ export async function updateClassInstance(
       start_time: toLocalTimestamp(input.startTime),
       end_time: toLocalTimestamp(input.endTime),
       duration_minutes: input.durationMinutes,
+      is_open: input.isOpen,
+      max_joiners: input.isOpen ? input.maxJoiners : null,
     })
     .eq("id", id)
     .eq("coach_id", coachId)

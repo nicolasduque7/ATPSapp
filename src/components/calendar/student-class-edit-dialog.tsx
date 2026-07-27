@@ -24,6 +24,7 @@ import {
   DateOffsetField,
   EVERY_OPTIONS,
   FREQUENCIES,
+  OpenClassField,
   ReadOnlyField,
   SegmentedToggle,
   TimeField,
@@ -119,6 +120,10 @@ function StudentClassEditForm({
   )
   const [classType, setClassType] = useState<ClassType | null>(
     mode === "create" ? null : event.resource.type
+  )
+  const [isOpen, setIsOpen] = useState(mode === "create" ? false : event.resource.isOpen)
+  const [maxJoiners, setMaxJoiners] = useState(
+    mode === "create" ? 1 : (event.resource.maxJoiners ?? 1)
   )
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -291,6 +296,8 @@ function StudentClassEditForm({
           startTime: start,
           endTime: end,
           durationMinutes: Math.round((end.getTime() - start.getTime()) / 60_000),
+          isOpen,
+          maxJoiners: isOpen ? maxJoiners : null,
         }
         await onSave(mode === "create" ? { kind: "one-off", input } : { kind: "instance-edit", input })
       }
@@ -446,6 +453,12 @@ function StudentClassEditForm({
                 onChange={setSingleEndTime}
               />
             </div>
+            <OpenClassField
+              isOpen={isOpen}
+              onIsOpenChange={setIsOpen}
+              maxJoiners={maxJoiners}
+              onMaxJoinersChange={setMaxJoiners}
+            />
           </>
         )}
 

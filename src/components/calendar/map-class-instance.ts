@@ -28,6 +28,8 @@ export function mapClassInstanceToEvent(
       durationMinutes: instance.durationMinutes,
       type: instance.type,
       seriesId: instance.seriesId,
+      isOpen: instance.isOpen,
+      maxJoiners: instance.maxJoiners,
     },
   }
 }

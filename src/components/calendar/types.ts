@@ -48,6 +48,8 @@ export interface CalendarClassEvent {
     durationMinutes: number
     type: ClassType
     seriesId?: string | null
+    isOpen: boolean
+    maxJoiners: number | null
   }
 }
 

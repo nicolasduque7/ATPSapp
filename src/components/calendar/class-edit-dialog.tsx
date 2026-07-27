@@ -24,6 +24,7 @@ import {
   DateOffsetField,
   EVERY_OPTIONS,
   FREQUENCIES,
+  OpenClassField,
   ReadOnlyField,
   SegmentedToggle,
   TimeField,
@@ -81,6 +82,8 @@ export function createDraftEvent(): CalendarClassEvent {
       durationMinutes: 60,
       type: "Private",
       seriesId: null,
+      isOpen: false,
+      maxJoiners: null,
     },
   }
 }
@@ -146,6 +149,10 @@ function ClassEditForm({
   )
   const [classType, setClassType] = useState<ClassType | null>(
     mode === "create" ? null : event.resource.type
+  )
+  const [isOpen, setIsOpen] = useState(mode === "create" ? false : event.resource.isOpen)
+  const [maxJoiners, setMaxJoiners] = useState(
+    mode === "create" ? 1 : (event.resource.maxJoiners ?? 1)
   )
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -318,6 +325,8 @@ function ClassEditForm({
           startTime: start,
           endTime: end,
           durationMinutes: Math.round((end.getTime() - start.getTime()) / 60_000),
+          isOpen,
+          maxJoiners: isOpen ? maxJoiners : null,
         }
         await onSave(mode === "create" ? { kind: "one-off", input } : { kind: "instance-edit", input })
       }
@@ -473,6 +482,12 @@ function ClassEditForm({
                 onChange={setSingleEndTime}
               />
             </div>
+            <OpenClassField
+              isOpen={isOpen}
+              onIsOpenChange={setIsOpen}
+              maxJoiners={maxJoiners}
+              onMaxJoinersChange={setMaxJoiners}
+            />
           </>
         )}
 

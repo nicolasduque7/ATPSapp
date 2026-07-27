@@ -188,6 +188,8 @@ function StudentProfileForm({
         durationMinutes: selectedClass.durationMinutes,
         type: selectedClass.type,
         seriesId: selectedClass.seriesId,
+        isOpen: selectedClass.isOpen,
+        maxJoiners: selectedClass.maxJoiners,
       },
     }
   }, [selectedClass, locations, student.id, student.name, level])

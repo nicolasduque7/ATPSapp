@@ -55,6 +55,8 @@ export interface ClassInstance {
   durationMinutes: number
   completed: boolean
   notes?: string
+  isOpen: boolean
+  maxJoiners: number | null
 }
 
 export interface AvailabilityBlock {
