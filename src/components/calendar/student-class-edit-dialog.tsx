@@ -15,7 +15,17 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { getLocationColorStyle } from "@/lib/location-colors"
-import { addDays, addMinutes, combineDateAndTime, type SeriesFrequency } from "@/lib/dates"
+import {
+  addDays,
+  addMinutes,
+  combineClubDateAndTime,
+  combineDateAndTime,
+  formatDateOnly,
+  parseDateOnly,
+  toClubZoned,
+  zonedNow,
+  type SeriesFrequency,
+} from "@/lib/dates"
 import { getStudentClassSeriesMeta } from "@/lib/actions/student-classes"
 import type { ClassType, Coach, Location } from "@/lib/mock-data"
 import type { CalendarClassEvent, StudentClassFormSubmission } from "@/components/calendar/types"
@@ -140,16 +150,16 @@ function StudentClassEditForm({
     (mode === "create" && bookingKind === "recurring") ||
     (mode === "edit" && isSeriesInstance && editScope === "series")
 
-  const today = useMemo(() => startOfDay(new Date()), [])
+  const today = useMemo(() => startOfDay(zonedNow()), [])
   const initialDateOffset = useMemo(
-    () => differenceInCalendarDays(startOfDay(event.start), today),
+    () => differenceInCalendarDays(startOfDay(toClubZoned(event.start)), today),
     [event.start, today]
   )
 
   // Single-date fields: one-off create, or editing just this instance.
   const [dateOffset, setDateOffset] = useState(initialDateOffset)
-  const [singleStartTime, setSingleStartTime] = useState(() => toTimeInputValue(event.start))
-  const [singleEndTime, setSingleEndTime] = useState(() => toTimeInputValue(event.end))
+  const [singleStartTime, setSingleStartTime] = useState(() => toTimeInputValue(toClubZoned(event.start)))
+  const [singleEndTime, setSingleEndTime] = useState(() => toTimeInputValue(toClubZoned(event.end)))
 
   // Recurring-pattern fields: creating a series, or editing the whole series.
   const [recurringStartOffset, setRecurringStartOffset] = useState(initialDateOffset)
@@ -157,8 +167,8 @@ function StudentClassEditForm({
   const [intervalCount, setIntervalCount] = useState(1)
   const [recurringWeekdays, setRecurringWeekdays] = useState<number[]>([])
   const [dayOfMonth, setDayOfMonth] = useState(1)
-  const [recurringStartTime, setRecurringStartTime] = useState(() => toTimeInputValue(event.start))
-  const [recurringEndTime, setRecurringEndTime] = useState(() => toTimeInputValue(event.end))
+  const [recurringStartTime, setRecurringStartTime] = useState(() => toTimeInputValue(toClubZoned(event.start)))
+  const [recurringEndTime, setRecurringEndTime] = useState(() => toTimeInputValue(toClubZoned(event.end)))
   const [recurringUntilOffset, setRecurringUntilOffset] = useState(
     initialDateOffset + DEFAULT_SERIES_LENGTH_DAYS
   )
@@ -183,7 +193,7 @@ function StudentClassEditForm({
         setRecurringStartTime(meta.startTime)
         const start = combineDateAndTime(today, meta.startTime)
         setRecurringEndTime(toTimeInputValue(addMinutes(start, meta.durationMinutes)))
-        setRecurringUntilOffset(differenceInCalendarDays(meta.endDate, today))
+        setRecurringUntilOffset(differenceInCalendarDays(parseDateOnly(meta.endDate), today))
         setSeriesMetaLoaded(true)
       })
       .catch((err) => {
@@ -262,10 +272,10 @@ function StudentClassEditForm({
               intervalCount,
               weekdays,
               dayOfMonth: dayOfMonthValue,
-              startDate: addDays(today, recurringStartOffset),
+              startDate: formatDateOnly(addDays(today, recurringStartOffset)),
               startTime: recurringStartTime,
               durationMinutes,
-              endDate: addDays(today, recurringUntilOffset),
+              endDate: formatDateOnly(addDays(today, recurringUntilOffset)),
             },
           })
         } else if (seriesId) {
@@ -281,14 +291,14 @@ function StudentClassEditForm({
               dayOfMonth: dayOfMonthValue,
               startTime: recurringStartTime,
               durationMinutes,
-              endDate: addDays(today, recurringUntilOffset),
+              endDate: formatDateOnly(addDays(today, recurringUntilOffset)),
             },
           })
         }
       } else {
         const day = addDays(today, dateOffset)
-        const start = combineDateAndTime(day, singleStartTime)
-        const end = combineDateAndTime(day, singleEndTime)
+        const start = combineClubDateAndTime(day, singleStartTime)
+        const end = combineClubDateAndTime(day, singleEndTime)
         const input = {
           coachId: coach.id,
           locationId: location.id,

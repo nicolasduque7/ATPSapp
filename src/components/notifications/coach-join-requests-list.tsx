@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { format } from "date-fns"
+import { formatClubDate } from "@/lib/dates"
 
 import { JoinRequestDecisionDialog } from "@/components/notifications/join-request-decision-dialog"
 import type { PendingJoinRequestSummary } from "@/lib/queries/notifications"
@@ -39,7 +39,7 @@ export function CoachJoinRequestsList({ requests: initialRequests }: CoachJoinRe
                 Requested by {request.requestingStudentName}
               </span>
               <span className="text-sm text-muted-foreground">
-                {format(request.classStartTime, "MMM d, h:mm a")}
+                {formatClubDate(request.classStartTime, "MMM d, h:mm a")}
               </span>
             </button>
           ))}

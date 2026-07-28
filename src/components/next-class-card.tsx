@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight } from "lucide-react"
 
-import { useHasMounted } from "@/lib/hooks/use-has-mounted"
+import { formatClubDate, formatClubTime, isSameClubDay } from "@/lib/dates"
 import { Avatar } from "@/components/avatar"
 import { Button } from "@/components/ui/button"
 import { NextClassCountdown } from "@/components/next-class-countdown"
@@ -22,10 +22,7 @@ interface NextClassCardProps {
 }
 
 function formatTime(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date)
+  return formatClubTime(date)
 }
 
 function formatDurationHours(durationMinutes: number): string {
@@ -34,22 +31,16 @@ function formatDurationHours(durationMinutes: number): string {
 
 function formatDayLabel(date: Date): string {
   const now = new Date()
-  const tomorrow = new Date(now)
-  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60_000)
 
-  if (date.toDateString() === now.toDateString()) return "Today"
-  if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow"
+  if (isSameClubDay(date, now)) return "Today"
+  if (isSameClubDay(date, tomorrow)) return "Tomorrow"
 
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  }).format(date)
+  return formatClubDate(date, "EEE, MMM d")
 }
 
 export function NextClassCard({ nextClass, students, locations }: NextClassCardProps) {
   const router = useRouter()
-  const hasMounted = useHasMounted()
   const [editingEvent, setEditingEvent] = useState<CalendarClassEvent | null>(null)
   const [notifyOpen, setNotifyOpen] = useState(false)
 
@@ -95,14 +86,10 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
 
           <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 pr-24">
             <p className="font-heading text-2xl font-bold">
-              {hasMounted
-                ? `${formatDayLabel(nextClass.startTime)} · ${formatTime(nextClass.startTime)}`
-                : " "}
+              {formatDayLabel(nextClass.startTime)} · {formatTime(nextClass.startTime)}
             </p>
             <p className="text-sm text-primary-foreground/85">
-              {hasMounted
-                ? `– ${formatTime(nextClass.endTime)} · ${formatDurationHours(nextClass.durationMinutes)}`
-                : " "}
+              – {formatTime(nextClass.endTime)} · {formatDurationHours(nextClass.durationMinutes)}
             </p>
           </div>
 

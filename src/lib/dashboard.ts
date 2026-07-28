@@ -1,51 +1,38 @@
+import { isSameClubDay, clubWeekdayIndex, startOfClubDay } from "@/lib/dates"
 import { STUDENT_LEVELS, type ClassInstance, type DailyClassCount, type LevelClassCount, type Student, type StudentLevel } from "@/lib/mock-data"
 
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-}
-
-function getMondayOfWeek(date: Date): Date {
-  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const daysSinceMonday = (monday.getDay() + 6) % 7
-  monday.setDate(monday.getDate() - daysSinceMonday)
-  return monday
-}
-
-function getCurrentWorkingWeekRange(): { start: Date; end: Date } {
-  const start = getMondayOfWeek(new Date())
+function getCurrentWorkingWeekRange(now: Date): { start: Date; end: Date } {
+  const start = new Date(startOfClubDay(now).getTime() - clubWeekdayIndex(now) * 24 * 60 * 60_000)
   const end = new Date(start.getTime() + 7 * 24 * 60 * 60_000)
   return { start, end }
 }
 
-export function getClassesForToday(classes: ClassInstance[]): ClassInstance[] {
-  const now = new Date()
+export function getClassesForToday(classes: ClassInstance[], now: Date = new Date()): ClassInstance[] {
   return classes
-    .filter((c) => isSameDay(c.startTime, now))
+    .filter((c) => isSameClubDay(c.startTime, now))
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
 
-export function getNextClass(classes: ClassInstance[]): ClassInstance | undefined {
-  const now = new Date()
+export function getNextClass(classes: ClassInstance[], now: Date = new Date()): ClassInstance | undefined {
   return classes
     .filter((c) => c.startTime > now)
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())[0]
 }
 
-export function getHoursCoachedToday(classes: ClassInstance[]): number {
-  const now = new Date()
+export function getHoursCoachedToday(classes: ClassInstance[], now: Date = new Date()): number {
   const minutes = classes
-    .filter((c) => isSameDay(c.startTime, now) && c.completed)
+    .filter((c) => isSameClubDay(c.startTime, now) && c.completed)
     .reduce((sum, c) => sum + c.durationMinutes, 0)
   return Math.round((minutes / 60) * 10) / 10
 }
 
-export function getClassesCoachedThisWeek(classes: ClassInstance[]): number {
-  const { start, end } = getCurrentWorkingWeekRange()
+export function getClassesCoachedThisWeek(classes: ClassInstance[], now: Date = new Date()): number {
+  const { start, end } = getCurrentWorkingWeekRange(now)
   return classes.filter((c) => c.completed && c.startTime >= start && c.startTime < end).length
 }
 
-export function getStudentsCoachedThisWeek(classes: ClassInstance[]): number {
-  const { start, end } = getCurrentWorkingWeekRange()
+export function getStudentsCoachedThisWeek(classes: ClassInstance[], now: Date = new Date()): number {
+  const { start, end } = getCurrentWorkingWeekRange(now)
   const studentIds = new Set(
     classes
       .filter((c) => c.completed && c.startTime >= start && c.startTime < end)
@@ -58,8 +45,8 @@ export function getStudentsCoachedThisWeek(classes: ClassInstance[]): number {
 // classes array every row has the same studentId (themselves), so counting
 // distinct students is meaningless there — distinct coaches is the useful
 // stat instead.
-export function getCoachesTrainedWithThisWeek(classes: ClassInstance[]): number {
-  const { start, end } = getCurrentWorkingWeekRange()
+export function getCoachesTrainedWithThisWeek(classes: ClassInstance[], now: Date = new Date()): number {
+  const { start, end } = getCurrentWorkingWeekRange(now)
   const coachIds = new Set(
     classes
       .filter((c) => c.completed && c.startTime >= start && c.startTime < end)
@@ -70,13 +57,13 @@ export function getCoachesTrainedWithThisWeek(classes: ClassInstance[]): number 
 
 const WEEKDAY_ABBREVIATIONS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
-export function getBusiestDayThisWeek(classes: ClassInstance[]): string | undefined {
-  const { start, end } = getCurrentWorkingWeekRange()
+export function getBusiestDayThisWeek(classes: ClassInstance[], now: Date = new Date()): string | undefined {
+  const { start, end } = getCurrentWorkingWeekRange(now)
   const counts = [0, 0, 0, 0, 0, 0, 0]
 
   for (const c of classes) {
     if (c.startTime >= start && c.startTime < end) {
-      counts[(c.startTime.getDay() + 6) % 7] += 1
+      counts[clubWeekdayIndex(c.startTime)] += 1
     }
   }
 
@@ -106,16 +93,22 @@ export function getClassCountsByLevel(classes: ClassInstance[], students: Studen
   return STUDENT_LEVELS.map((level) => ({ level, count: counts[level] }))
 }
 
-export function getDailyClassCounts(classes: ClassInstance[], maxDays: number): DailyClassCount[] {
-  const now = new Date()
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+export function getDailyClassCounts(
+  classes: ClassInstance[],
+  maxDays: number,
+  now: Date = new Date()
+): DailyClassCount[] {
+  const startOfToday = startOfClubDay(now)
 
+  // `startOfToday` is a real instant (club-local midnight); step it in exact
+  // 24h increments rather than via ambient `setDate` — CLUB_TIMEZONE has no
+  // DST so this is exact, and it keeps `date`/`nextDate` safe real instants
+  // (no local-getter mutation on a value that crosses environments).
   const results: DailyClassCount[] = []
+  const dayMs = 24 * 60 * 60_000
   for (let offset = -maxDays; offset <= maxDays; offset++) {
-    const date = new Date(startOfToday)
-    date.setDate(date.getDate() + offset)
-    const nextDate = new Date(date)
-    nextDate.setDate(nextDate.getDate() + 1)
+    const date = new Date(startOfToday.getTime() + offset * dayMs)
+    const nextDate = new Date(date.getTime() + dayMs)
 
     const count = classes.filter((c) => c.startTime >= date && c.startTime < nextDate).length
 

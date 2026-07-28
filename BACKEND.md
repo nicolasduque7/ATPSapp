@@ -554,6 +554,60 @@ cards, decision/detail dialogs), `src/lib/queries/notifications.ts`, and
 
 ---
 
+## 13. Timezone handling (`CLUB_TIMEZONE`)
+
+`classes.start_time`/`end_time`, `class_series.start_time`, and
+`coach_availability_blocks.start_time`/`end_time` are all
+`timestamp without time zone` — deliberately "plain" wall-clock values with
+no timezone attached at the database layer (see the initial-schema
+migration's rationale). The bug this section exists to prevent: reading one
+of these into a JS `Date` and later reading that `Date`'s local getters
+(`getHours`, `getDate`, ...) only gives back the intended wall-clock digits
+if that happens in the **same** machine/timezone context it was parsed in.
+Next.js Server Components render on Vercel (UTC); a viewer's browser can be
+anywhere — so a `Date` built server-side and read client-side (or vice
+versa) silently drifts by the two machines' offset. This was the root cause
+of a real bug: the Home dashboard's "Classes Timeline" chart highlighted
+the wrong day as "today" for any viewer not in UTC.
+
+**Fix:** `src/lib/dates.ts` exports one explicit constant,
+`CLUB_TIMEZONE = "America/Bogota"`, and every place a "plain" timestamp
+crosses a read/write/display boundary goes through a `date-fns-tz` helper
+anchored to it — `parseDbTimestamp`/`formatDbTimestamp` (DB ↔ `Date`),
+`formatClubTime`/`formatClubDate` (`Date` → display string),
+`combineClubDateAndTime` (form day + "HH:mm" → a real, safe-to-persist
+instant), `startOfClubDay`/`isSameClubDay`/`clubWeekdayIndex` (day/week
+bucketing for the dashboard stats), and `zonedNow`/`toClubZoned` (a
+"read-only view" conversion, safe only when constructed and consumed
+within one runtime — see the code comment on those two in `dates.ts` before
+using them elsewhere). One constant, not a per-location/per-coach setting,
+since this is a single-club app (see `PROJECT.md`) — every location is
+assumed to be in the same real-world timezone.
+
+Calendar-only date fields (`class_series.start_date`/`end_date`,
+`coach_availability_series.start_date`/`end_date`) cross client/server
+boundaries as plain `"YYYY-MM-DD"` strings, not `Date` objects, for the
+same reason — a pure calendar date has no instant to anchor, so a string is
+simpler and immune to the reinterpretation bug entirely. `ClassSeriesInput`/
+`ClassSeriesMeta` and their Availability equivalents reflect this (`Date`
+fields only for values that carry a real time-of-day).
+
+`CLUB_TIMEZONE` (Bogotá) observes no DST, which sidesteps a whole class of
+edge cases for now — the helpers still go through real timezone-database
+conversions rather than hardcoded 24h assumptions, so this doesn't quietly
+break if the constant is ever pointed at a DST-observing zone.
+
+**Front-end connection:** `src/lib/dashboard.ts` (dashboard stats),
+`src/components/classes-timeline-chart.tsx`, `src/components/next-class-card.tsx`
+/ `student-next-class-card.tsx`, `src/components/schedule-pills.tsx`,
+`src/components/calendar/calendar-config.ts` (the react-big-calendar
+localizer is wrapped to read through `CLUB_TIMEZONE` instead of the
+viewer's own device timezone), `src/components/calendar/calendar-event.tsx`,
+the class/availability edit dialogs, `src/components/settings/settings-view.tsx`,
+and the notification detail dialogs all render through this convention now.
+
+---
+
 ## Known gaps / deliberately deferred
 
 These are documented so nobody re-discovers them as "surprises" later:

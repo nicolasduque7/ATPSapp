@@ -1,6 +1,6 @@
 import { requireCoachId, requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { toLocalTimestamp } from "@/lib/dates";
+import { formatDbTimestamp, parseDbTimestamp } from "@/lib/dates";
 import type { ClassInstance, ClassType, StudentLevel } from "@/lib/mock-data";
 import { mapClassRow, CLASS_COLUMNS } from "@/lib/queries/class-row";
 
@@ -12,7 +12,7 @@ export async function getUpcomingClasses(): Promise<ClassInstance[]> {
     .from("classes")
     .select(CLASS_COLUMNS)
     .eq("coach_id", coachId)
-    .gte("start_time", toLocalTimestamp(new Date()))
+    .gte("start_time", formatDbTimestamp(new Date()))
     .order("start_time");
 
   if (error) {
@@ -44,7 +44,7 @@ export async function getAllClasses(): Promise<ClassInstance[]> {
   }
 
   const now = new Date();
-  return (data ?? []).map((row) => mapClassRow(row, new Date(row.end_time) < now));
+  return (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now));
 }
 
 // A student's own classes, across every coach — explicitly filtered rather
@@ -66,7 +66,7 @@ export async function getStudentClasses(): Promise<ClassInstance[]> {
   }
 
   const now = new Date();
-  return (data ?? []).map((row) => mapClassRow(row, new Date(row.end_time) < now));
+  return (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now));
 }
 
 export interface OpenClassForStudent {
@@ -126,8 +126,8 @@ export async function getOpenClassesForStudent(): Promise<OpenClassForStudent[]>
       coachId: row.coach_id,
       coachName: row.coach_name,
       locationId: row.location_id,
-      startTime: new Date(row.start_time),
-      endTime: new Date(row.end_time),
+      startTime: parseDbTimestamp(row.start_time),
+      endTime: parseDbTimestamp(row.end_time),
       durationMinutes: row.duration_minutes,
       type: row.class_type,
       hostStudentId: row.host_student_id,
@@ -152,5 +152,5 @@ export async function getAllClassesAllCoaches(): Promise<ClassInstance[]> {
   }
 
   const now = new Date();
-  return (data ?? []).map((row) => mapClassRow(row, new Date(row.end_time) < now));
+  return (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now));
 }

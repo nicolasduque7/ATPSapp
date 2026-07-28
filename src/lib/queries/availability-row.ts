@@ -1,3 +1,4 @@
+import { parseDbTimestamp } from "@/lib/dates";
 import type { AvailabilityBlock } from "@/lib/mock-data";
 
 export const AVAILABILITY_BLOCK_COLUMNS =
@@ -18,7 +19,7 @@ export function mapAvailabilityBlockRow(row: AvailabilityBlockRow): Availability
     coachId: row.coach_id,
     seriesId: row.series_id,
     locationIds: row.location_ids,
-    startTime: new Date(row.start_time),
-    endTime: new Date(row.end_time),
+    startTime: parseDbTimestamp(row.start_time),
+    endTime: parseDbTimestamp(row.end_time),
   };
 }

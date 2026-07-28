@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { format } from "date-fns"
+import { formatClubDate } from "@/lib/dates"
 
 import {
   Dialog,
@@ -113,8 +113,8 @@ function JoinRequestDecisionView({
       </div>
       <ReadOnlyField label="Court" value={detail.locationName} />
       <div className="grid grid-cols-2 gap-4">
-        <ReadOnlyField label="Start" value={format(detail.startTime, "MMM d, h:mm a")} />
-        <ReadOnlyField label="End" value={format(detail.endTime, "h:mm a")} />
+        <ReadOnlyField label="Start" value={formatClubDate(detail.startTime, "MMM d, h:mm a")} />
+        <ReadOnlyField label="End" value={formatClubDate(detail.endTime, "h:mm a")} />
       </div>
 
       <p className="text-sm text-foreground">Authorize this student to join the class?</p>

@@ -1,3 +1,4 @@
+import { parseDbTimestamp } from "@/lib/dates";
 import type { ClassInstance, ClassType } from "@/lib/mock-data";
 
 export const CLASS_COLUMNS =
@@ -26,8 +27,8 @@ export function mapClassRow(row: ClassRow, completed = false): ClassInstance {
     locationId: row.location_id,
     seriesId: row.series_id,
     type: row.class_type,
-    startTime: new Date(row.start_time),
-    endTime: new Date(row.end_time),
+    startTime: parseDbTimestamp(row.start_time),
+    endTime: parseDbTimestamp(row.end_time),
     durationMinutes: row.duration_minutes,
     completed,
     notes: row.notes ?? undefined,

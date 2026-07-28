@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useHasMounted } from "@/lib/hooks/use-has-mounted"
+import { formatClubDate } from "@/lib/dates"
 import type { ClassInstance } from "@/lib/mock-data"
 
 interface ScheduleEntity {
@@ -24,9 +25,7 @@ interface SchedulePillsProps {
 }
 
 function formatPillTime(date: Date): string {
-  const hours = date.getHours() % 12 || 12
-  const minutes = date.getMinutes().toString().padStart(2, "0")
-  return `${hours}:${minutes}`
+  return formatClubDate(date, "h:mm")
 }
 
 export function SchedulePills({

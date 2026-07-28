@@ -1,6 +1,6 @@
 import { requireCoachId, requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { parseDateOnly, type SeriesFrequency } from "@/lib/dates";
+import type { SeriesFrequency } from "@/lib/dates";
 import type { AvailabilityBlock } from "@/lib/mock-data";
 import { mapAvailabilityBlockRow, AVAILABILITY_BLOCK_COLUMNS } from "@/lib/queries/availability-row";
 
@@ -75,8 +75,8 @@ export interface AvailabilitySeriesSummary {
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
   locationIds: string[];
-  startDate: Date;
-  endDate: Date;
+  startDate: string; // "YYYY-MM-DD", club-local
+  endDate: string; // "YYYY-MM-DD", club-local
 }
 
 // The coach's own recurring working-hours rules, for the Settings page's
@@ -109,7 +109,7 @@ export async function getCoachAvailabilitySeries(): Promise<AvailabilitySeriesSu
     startTime: row.start_time.slice(0, 5),
     endTime: row.end_time.slice(0, 5),
     locationIds: row.location_ids,
-    startDate: parseDateOnly(row.start_date),
-    endDate: parseDateOnly(row.end_date),
+    startDate: row.start_date,
+    endDate: row.end_date,
   }));
 }

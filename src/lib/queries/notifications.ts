@@ -1,5 +1,6 @@
 import { requireCoachId, requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { parseDbTimestamp } from "@/lib/dates";
 import type { ClassType, StudentLevel } from "@/lib/mock-data";
 
 // Notifications are role-agnostic by design (recipient_id is just
@@ -90,8 +91,8 @@ export async function getPendingJoinRequestsForCoach(): Promise<PendingJoinReque
       {
         id: row.id,
         requestingStudentName: requester.name,
-        classStartTime: new Date(cls.start_time),
-        classEndTime: new Date(cls.end_time),
+        classStartTime: parseDbTimestamp(cls.start_time),
+        classEndTime: parseDbTimestamp(cls.end_time),
       },
     ];
   });
@@ -149,8 +150,8 @@ export async function getSentJoinRequestsForStudent(): Promise<SentJoinRequestSu
     requestId: row.request_id,
     status: row.status,
     hostStudentName: row.host_student_name,
-    startTime: new Date(row.start_time),
-    endTime: new Date(row.end_time),
+    startTime: parseDbTimestamp(row.start_time),
+    endTime: parseDbTimestamp(row.end_time),
   }));
 }
 
@@ -187,8 +188,8 @@ export async function getReceivedJoinsForStudent(): Promise<ReceivedJoinSummary[
   return ((data as ReceivedJoinRow[]) ?? []).map((row) => ({
     classId: row.class_id,
     joiningStudentName: row.joining_student_name,
-    startTime: new Date(row.start_time),
-    endTime: new Date(row.end_time),
+    startTime: parseDbTimestamp(row.start_time),
+    endTime: parseDbTimestamp(row.end_time),
   }));
 }
 

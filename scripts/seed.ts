@@ -14,7 +14,8 @@ import {
   addMinutes,
   formatDateOnly as localDate,
   generateOccurrences,
-  toLocalTimestamp as localTimestamp,
+  combineClubDateAndTime,
+  formatDbTimestamp as localTimestamp,
   type RecurrencePattern,
 } from "../src/lib/dates";
 import type {
@@ -56,15 +57,10 @@ function pad(n: number): string {
   return n.toString().padStart(2, "0");
 }
 
-function localTime(d: Date): string {
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-}
-
 function at(base: Date, dayOffset: number, hour: number, minute: number): Date {
-  const d = new Date(base);
-  d.setDate(d.getDate() + dayOffset);
-  d.setHours(hour, minute, 0, 0);
-  return d;
+  const day = new Date(base);
+  day.setDate(day.getDate() + dayOffset);
+  return combineClubDateAndTime(day, `${pad(hour)}:${pad(minute)}`);
 }
 
 // 0 = Monday .. 6 = Sunday, matching class_series.weekdays' convention.
@@ -288,7 +284,7 @@ async function seed(): Promise<void> {
         interval_count: pattern.intervalCount,
         weekdays: pattern.weekdays ?? null,
         day_of_month: pattern.dayOfMonth ?? null,
-        start_time: localTime(at(startDate, 0, hour, minute)),
+        start_time: `${pad(hour)}:${pad(minute)}:00`,
         duration_minutes: durationMinutes,
         start_date: localDate(startDate),
         end_date: localDate(endDate),

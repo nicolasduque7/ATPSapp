@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { format } from "date-fns"
+import { formatClubDate } from "@/lib/dates"
 
 import {
   Dialog,
@@ -78,8 +78,8 @@ function OpenClassView({
         <ReadOnlyField label="Coach" value={coachName} />
         <ReadOnlyField label="Court" value={locationName} />
         <div className="grid grid-cols-2 gap-4">
-          <ReadOnlyField label="Start" value={format(event.start, "MMM d, h:mm a")} />
-          <ReadOnlyField label="End" value={format(event.end, "MMM d, h:mm a")} />
+          <ReadOnlyField label="Start" value={formatClubDate(event.start, "MMM d, h:mm a")} />
+          <ReadOnlyField label="End" value={formatClubDate(event.end, "MMM d, h:mm a")} />
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

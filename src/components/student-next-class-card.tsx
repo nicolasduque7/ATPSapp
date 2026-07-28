@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react"
 
 import { Avatar } from "@/components/avatar"
 import { Button } from "@/components/ui/button"
+import { formatClubDate, formatClubTime, isSameClubDay } from "@/lib/dates"
 import { NextClassCountdown } from "@/components/next-class-countdown"
 import { NotifyDialog } from "@/components/notify-dialog"
 import { StudentClassEditDialog } from "@/components/calendar/student-class-edit-dialog"
@@ -27,10 +28,7 @@ interface StudentNextClassCardProps {
 }
 
 function formatTime(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date)
+  return formatClubTime(date)
 }
 
 function formatDurationHours(durationMinutes: number): string {
@@ -39,17 +37,12 @@ function formatDurationHours(durationMinutes: number): string {
 
 function formatDayLabel(date: Date): string {
   const now = new Date()
-  const tomorrow = new Date(now)
-  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60_000)
 
-  if (date.toDateString() === now.toDateString()) return "Today"
-  if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow"
+  if (isSameClubDay(date, now)) return "Today"
+  if (isSameClubDay(date, tomorrow)) return "Tomorrow"
 
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  }).format(date)
+  return formatClubDate(date, "EEE, MMM d")
 }
 
 export function StudentNextClassCard({

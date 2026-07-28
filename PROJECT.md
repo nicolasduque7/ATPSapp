@@ -203,6 +203,15 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
   (e.g. a stale `/calendar` bookmark, or a session expiring mid-page) still
   redirect to `/login` as before, since that's a returning-user scenario, not
   a first visit.
+- The whole app is pinned to one explicit timezone, `CLUB_TIMEZONE =
+  "America/Bogota"` (see `BACKEND.md` section 13), rather than trusting
+  whatever timezone the rendering server or viewer's device happens to be
+  in — a single constant, not a per-location/per-coach setting, since this
+  is one shared club/academy, not a multi-region product. Fixes a real
+  production bug where the Home dashboard's Classes Timeline chart (and,
+  more subtly, class/working-hours times shown elsewhere) could be off by
+  a day or an hour for any viewer not in the same timezone as the Vercel
+  server (UTC).
 
 ## Planned (not yet built)
 - Re-enable Google sign-in once the accidental-coach-account risk (see

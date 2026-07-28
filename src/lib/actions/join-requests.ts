@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireCoachId, requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { parseDbTimestamp } from "@/lib/dates";
 import type { ClassType, StudentLevel } from "@/lib/mock-data";
 import type { JoinRequestDetail, JoinRequestStatus, PartnerStudent } from "@/lib/queries/notifications";
 import { getClassPartnerStudents } from "@/lib/queries/notifications";
@@ -100,8 +101,8 @@ export async function getJoinRequestDetail(requestId: string): Promise<JoinReque
     hostStudentLevel: host.level,
     locationName: location.name,
     classType: cls.class_type,
-    startTime: new Date(cls.start_time),
-    endTime: new Date(cls.end_time),
+    startTime: parseDbTimestamp(cls.start_time),
+    endTime: parseDbTimestamp(cls.end_time),
   };
 }
 
@@ -151,8 +152,8 @@ export async function getSentJoinRequestDetail(requestId: string): Promise<SentJ
 
   return {
     status: data.status,
-    startTime: new Date(data.start_time),
-    endTime: new Date(data.end_time),
+    startTime: parseDbTimestamp(data.start_time),
+    endTime: parseDbTimestamp(data.end_time),
     classType: data.class_type,
     locationName: data.location_name,
     host: {
@@ -208,8 +209,8 @@ export async function getReceivedJoinDetail(classId: string): Promise<ReceivedJo
   }
 
   return {
-    startTime: new Date(data.start_time),
-    endTime: new Date(data.end_time),
+    startTime: parseDbTimestamp(data.start_time),
+    endTime: parseDbTimestamp(data.end_time),
     classType: data.class_type,
     locationName: location.name,
     joiners,

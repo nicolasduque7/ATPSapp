@@ -15,7 +15,15 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { getLocationColorStyle } from "@/lib/location-colors"
-import { addDays, combineDateAndTime, type SeriesFrequency } from "@/lib/dates"
+import {
+  addDays,
+  combineClubDateAndTime,
+  formatDateOnly,
+  parseDateOnly,
+  toClubZoned,
+  zonedNow,
+  type SeriesFrequency,
+} from "@/lib/dates"
 import { getAvailabilitySeriesMeta } from "@/lib/actions/availability"
 import {
   DAY_OF_MONTH_OPTIONS,
@@ -119,26 +127,26 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
     (target.kind === "create" && bookingKind === "recurring") ||
     (isBlockPartOfSeries && editScope === "series")
 
-  const today = useMemo(() => startOfDay(new Date()), [])
+  const today = useMemo(() => startOfDay(zonedNow()), [])
 
   const initialDateOffset =
-    target.kind === "block" ? differenceInCalendarDays(startOfDay(target.block.startTime), today) : 0
+    target.kind === "block" ? differenceInCalendarDays(startOfDay(toClubZoned(target.block.startTime)), today) : 0
 
   // One-off fields: create-as-one-off, editing a one-off block, or editing
   // just "this occurrence" of a series-linked block.
   const [dateOffset, setDateOffset] = useState(initialDateOffset)
   const [singleStartTime, setSingleStartTime] = useState(() =>
-    target.kind === "block" ? toTimeInputValue(target.block.startTime) : "13:00"
+    target.kind === "block" ? toTimeInputValue(toClubZoned(target.block.startTime)) : "13:00"
   )
   const [singleEndTime, setSingleEndTime] = useState(() =>
-    target.kind === "block" ? toTimeInputValue(target.block.endTime) : "17:00"
+    target.kind === "block" ? toTimeInputValue(toClubZoned(target.block.endTime)) : "17:00"
   )
 
   // Recurring-pattern fields: creating a series, editing an existing one
   // directly (Settings), or editing "whole series" from a clicked block
   // (Calendar) — the latter is populated by the lazy fetch below.
   const [recurringStartOffset, setRecurringStartOffset] = useState(
-    target.kind === "series" ? differenceInCalendarDays(startOfDay(target.series.startDate), today) : 0
+    target.kind === "series" ? differenceInCalendarDays(parseDateOnly(target.series.startDate), today) : 0
   )
   const [frequency, setFrequency] = useState<SeriesFrequency>(
     target.kind === "series" ? target.series.frequency : "Weekly"
@@ -156,7 +164,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
   )
   const [recurringUntilOffset, setRecurringUntilOffset] = useState(
     target.kind === "series"
-      ? differenceInCalendarDays(target.series.endDate, today)
+      ? differenceInCalendarDays(parseDateOnly(target.series.endDate), today)
       : DEFAULT_SERIES_LENGTH_DAYS
   )
 
@@ -177,7 +185,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
         setRecurringStartTime(meta.startTime)
         setRecurringEndTime(meta.endTime)
         setLocationIds(meta.locationIds)
-        setRecurringUntilOffset(differenceInCalendarDays(meta.endDate, today))
+        setRecurringUntilOffset(differenceInCalendarDays(parseDateOnly(meta.endDate), today))
         setSeriesMetaLoaded(true)
       })
       .catch((err) => {
@@ -253,10 +261,10 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
               intervalCount,
               weekdays,
               dayOfMonth: dayOfMonthValue,
-              startDate: addDays(today, recurringStartOffset),
+              startDate: formatDateOnly(addDays(today, recurringStartOffset)),
               startTime: recurringStartTime,
               endTime: recurringEndTime,
-              endDate: addDays(today, recurringUntilOffset),
+              endDate: formatDateOnly(addDays(today, recurringUntilOffset)),
             },
           })
         } else {
@@ -272,7 +280,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
               dayOfMonth: dayOfMonthValue,
               startTime: recurringStartTime,
               endTime: recurringEndTime,
-              endDate: addDays(today, recurringUntilOffset),
+              endDate: formatDateOnly(addDays(today, recurringUntilOffset)),
             },
           })
         }
@@ -280,8 +288,8 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
         const day = addDays(today, dateOffset)
         const input = {
           locationIds,
-          startTime: combineDateAndTime(day, singleStartTime),
-          endTime: combineDateAndTime(day, singleEndTime),
+          startTime: combineClubDateAndTime(day, singleStartTime),
+          endTime: combineClubDateAndTime(day, singleEndTime),
         }
         await onSave(target.kind === "block" ? { kind: "one-off-edit", input } : { kind: "one-off-create", input })
       }

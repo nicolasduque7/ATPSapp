@@ -1,6 +1,4 @@
-import { format } from "date-fns";
-
-import { addMinutes, combineDateAndTime, toLocalTimestamp } from "@/lib/dates";
+import { addMinutes, combineClubDateAndTime, formatClubDate, formatDbTimestamp, parseDbTimestamp } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
 import type { ClassType } from "@/lib/mock-data";
 
@@ -21,8 +19,8 @@ export async function assertNoStudentConflict(
 ): Promise<void> {
   const { data, error } = await supabase.rpc("check_student_conflict", {
     p_student_id: studentId,
-    p_start_time: toLocalTimestamp(startTime),
-    p_end_time: toLocalTimestamp(endTime),
+    p_start_time: formatDbTimestamp(startTime),
+    p_end_time: formatDbTimestamp(endTime),
     p_exclude_class_id: excludeClassId ?? null,
   });
 
@@ -33,8 +31,8 @@ export async function assertNoStudentConflict(
 
   const conflict = data?.[0];
   if (conflict) {
-    const conflictStart = format(new Date(conflict.start_time), "MMM d, h:mm a");
-    const conflictEnd = format(new Date(conflict.end_time), "h:mm a");
+    const conflictStart = formatClubDate(parseDbTimestamp(conflict.start_time), "MMM d, h:mm a");
+    const conflictEnd = formatClubDate(parseDbTimestamp(conflict.end_time), "h:mm a");
     throw new Error(
       `This student is already booked with ${conflict.coach_name} from ${conflictStart} to ${conflictEnd}. Pick a different time or student.`,
     );
@@ -54,8 +52,8 @@ export async function assertNoCoachConflict(
 ): Promise<void> {
   const { data, error } = await supabase.rpc("check_coach_conflict", {
     p_coach_id: coachId,
-    p_start_time: toLocalTimestamp(startTime),
-    p_end_time: toLocalTimestamp(endTime),
+    p_start_time: formatDbTimestamp(startTime),
+    p_end_time: formatDbTimestamp(endTime),
     p_exclude_class_id: excludeClassId ?? null,
   });
 
@@ -66,8 +64,8 @@ export async function assertNoCoachConflict(
 
   const conflict = data?.[0];
   if (conflict) {
-    const conflictStart = format(new Date(conflict.start_time), "MMM d, h:mm a");
-    const conflictEnd = format(new Date(conflict.end_time), "h:mm a");
+    const conflictStart = formatClubDate(parseDbTimestamp(conflict.start_time), "MMM d, h:mm a");
+    const conflictEnd = formatClubDate(parseDbTimestamp(conflict.end_time), "h:mm a");
     throw new Error(
       `This coach is already booked with ${conflict.student_name} from ${conflictStart} to ${conflictEnd}. Pick a different time or coach.`,
     );
@@ -100,7 +98,7 @@ export function buildInstanceRows(
   input: { locationId: string; type: ClassType; startTime: string; durationMinutes: number },
 ): SeriesInstanceRow[] {
   return occurrences.map((day) => {
-    const startTime = combineDateAndTime(day, input.startTime);
+    const startTime = combineClubDateAndTime(day, input.startTime);
     const endTime = addMinutes(startTime, input.durationMinutes);
     return {
       coach_id: coachId,
@@ -108,8 +106,8 @@ export function buildInstanceRows(
       location_id: input.locationId,
       series_id: seriesId,
       class_type: input.type,
-      start_time: toLocalTimestamp(startTime),
-      end_time: toLocalTimestamp(endTime),
+      start_time: formatDbTimestamp(startTime),
+      end_time: formatDbTimestamp(endTime),
       duration_minutes: input.durationMinutes,
     };
   });

@@ -6,11 +6,12 @@ import { requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
   addMinutes,
-  combineDateAndTime,
-  formatDateOnly,
+  combineClubDateAndTime,
+  formatDbTimestamp,
   generateOccurrences,
   parseDateOnly,
-  toLocalTimestamp,
+  parseDbTimestamp,
+  toClubZoned,
   type RecurrencePattern,
   type SeriesFrequency,
 } from "@/lib/dates";
@@ -64,10 +65,10 @@ export interface StudentClassSeriesInput {
   intervalCount: number;
   weekdays?: number[] | null;
   dayOfMonth?: number | null;
-  startDate: Date;
+  startDate: string; // "YYYY-MM-DD", club-local
   startTime: string; // "HH:mm"
   durationMinutes: number;
-  endDate: Date;
+  endDate: string; // "YYYY-MM-DD", club-local
 }
 
 export interface StudentClassSeriesUpdateInput {
@@ -79,7 +80,7 @@ export interface StudentClassSeriesUpdateInput {
   dayOfMonth?: number | null;
   startTime: string; // "HH:mm"
   durationMinutes: number;
-  endDate: Date;
+  endDate: string; // "YYYY-MM-DD", club-local
 }
 
 export async function createStudentClass(input: StudentClassInstanceInput): Promise<ClassInstance> {
@@ -97,8 +98,8 @@ export async function createStudentClass(input: StudentClassInstanceInput): Prom
       student_id: studentId,
       location_id: input.locationId,
       class_type: input.type,
-      start_time: toLocalTimestamp(input.startTime),
-      end_time: toLocalTimestamp(input.endTime),
+      start_time: formatDbTimestamp(input.startTime),
+      end_time: formatDbTimestamp(input.endTime),
       duration_minutes: input.durationMinutes,
       is_open: input.isOpen,
       max_joiners: input.isOpen ? input.maxJoiners : null,
@@ -141,13 +142,13 @@ export async function createStudentClassSeries(input: StudentClassSeriesInput): 
     weekdays: input.frequency === "Weekly" ? input.weekdays : null,
     dayOfMonth: input.frequency === "Monthly" ? input.dayOfMonth : null,
   };
-  const occurrences = generateOccurrences(pattern, input.startDate, input.endDate);
+  const occurrences = generateOccurrences(pattern, parseDateOnly(input.startDate), parseDateOnly(input.endDate));
   if (occurrences.length === 0) {
     throw new Error("Until date must be on or after the start date.");
   }
 
   for (const day of occurrences) {
-    const startTime = combineDateAndTime(day, input.startTime);
+    const startTime = combineClubDateAndTime(day, input.startTime);
     const endTime = addMinutes(startTime, input.durationMinutes);
     await assertNoStudentConflict(supabase, studentId, startTime, endTime);
     await assertNoCoachConflict(supabase, input.coachId, startTime, endTime);
@@ -166,8 +167,8 @@ export async function createStudentClassSeries(input: StudentClassSeriesInput): 
       day_of_month: pattern.dayOfMonth,
       start_time: `${input.startTime}:00`,
       duration_minutes: input.durationMinutes,
-      start_date: formatDateOnly(input.startDate),
-      end_date: formatDateOnly(input.endDate),
+      start_date: input.startDate,
+      end_date: input.endDate,
     })
     .select("id")
     .single();
@@ -219,7 +220,7 @@ export async function updateStudentClassSeries(
       day_of_month: input.dayOfMonth ?? null,
       start_time: `${input.startTime}:00`,
       duration_minutes: input.durationMinutes,
-      end_date: formatDateOnly(input.endDate),
+      end_date: input.endDate,
     })
     .eq("id", seriesId)
     .eq("student_id", studentId)
@@ -236,7 +237,7 @@ export async function updateStudentClassSeries(
     .delete()
     .eq("series_id", seriesId)
     .eq("student_id", studentId)
-    .gt("start_time", toLocalTimestamp(now));
+    .gt("start_time", formatDbTimestamp(now));
 
   if (deleteError) {
     console.error("updateStudentClassSeries (clearing future instances) failed:", deleteError);
@@ -249,13 +250,13 @@ export async function updateStudentClassSeries(
     weekdays: input.weekdays,
     dayOfMonth: input.dayOfMonth,
   };
-  const occurrences = generateOccurrences(pattern, now, input.endDate).filter(
-    (day) => combineDateAndTime(day, input.startTime) > now,
+  const occurrences = generateOccurrences(pattern, toClubZoned(now), parseDateOnly(input.endDate)).filter(
+    (day) => combineClubDateAndTime(day, input.startTime) > now,
   );
 
   if (occurrences.length > 0) {
     for (const day of occurrences) {
-      const startTime = combineDateAndTime(day, input.startTime);
+      const startTime = combineClubDateAndTime(day, input.startTime);
       const endTime = addMinutes(startTime, input.durationMinutes);
       await assertNoStudentConflict(supabase, studentId, startTime, endTime);
       await assertNoCoachConflict(supabase, input.coachId, startTime, endTime);
@@ -286,7 +287,7 @@ export async function updateStudentClassSeries(
   }
 
   revalidateAll();
-  return (data ?? []).map((row) => mapClassRow(row, new Date(row.end_time) < now));
+  return (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now));
 }
 
 // Student-side equivalent of getClassSeriesMeta, filtered by student_id so a
@@ -315,7 +316,7 @@ export async function getStudentClassSeriesMeta(seriesId: string): Promise<Class
     dayOfMonth: data.day_of_month,
     startTime: data.start_time.slice(0, 5),
     durationMinutes: data.duration_minutes,
-    endDate: parseDateOnly(data.end_date),
+    endDate: data.end_date,
   };
 }
 
@@ -336,8 +337,8 @@ export async function updateStudentClassInstance(
       coach_id: input.coachId,
       location_id: input.locationId,
       class_type: input.type,
-      start_time: toLocalTimestamp(input.startTime),
-      end_time: toLocalTimestamp(input.endTime),
+      start_time: formatDbTimestamp(input.startTime),
+      end_time: formatDbTimestamp(input.endTime),
       duration_minutes: input.durationMinutes,
       is_open: input.isOpen,
       max_joiners: input.isOpen ? input.maxJoiners : null,

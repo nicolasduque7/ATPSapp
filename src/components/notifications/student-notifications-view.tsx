@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { format } from "date-fns"
+import { formatClubDate } from "@/lib/dates"
 
 import { StatusIcon } from "@/components/notifications/status-icon"
 import { SentRequestDetailDialog } from "@/components/notifications/sent-request-detail-dialog"
@@ -37,7 +37,7 @@ export function StudentNotificationsView({ sentRequests, receivedJoins }: Studen
                 <span className="font-medium text-foreground">{request.hostStudentName}</span>
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-muted-foreground">
-                    {format(request.startTime, "MMM d, h:mm a")}
+                    {formatClubDate(request.startTime, "MMM d, h:mm a")}
                   </span>
                   <StatusIcon status={request.status} />
                 </div>
@@ -64,7 +64,7 @@ export function StudentNotificationsView({ sentRequests, receivedJoins }: Studen
               >
                 <span className="font-medium text-foreground">{join.joiningStudentName}</span>
                 <span className="text-sm text-muted-foreground">
-                  {format(join.startTime, "MMM d, h:mm a")}
+                  {formatClubDate(join.startTime, "MMM d, h:mm a")}
                 </span>
               </button>
             ))}

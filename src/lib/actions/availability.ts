@@ -5,11 +5,11 @@ import { revalidatePath } from "next/cache";
 import { requireCoachId } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
-  combineDateAndTime,
-  formatDateOnly,
+  combineClubDateAndTime,
+  formatDbTimestamp,
   generateOccurrences,
   parseDateOnly,
-  toLocalTimestamp,
+  toClubZoned,
   type RecurrencePattern,
   type SeriesFrequency,
 } from "@/lib/dates";
@@ -28,10 +28,10 @@ export interface AvailabilitySeriesInput {
   intervalCount: number;
   weekdays?: number[] | null; // required (non-empty) when frequency === "Weekly"
   dayOfMonth?: number | null; // required when frequency === "Monthly", 1-30
-  startDate: Date;
+  startDate: string; // "YYYY-MM-DD", club-local
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
-  endDate: Date;
+  endDate: string; // "YYYY-MM-DD", club-local
 }
 
 // Frequency is intentionally absent — it's locked at creation, same as
@@ -43,7 +43,7 @@ export interface AvailabilitySeriesUpdateInput {
   dayOfMonth?: number | null;
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
-  endDate: Date;
+  endDate: string; // "YYYY-MM-DD", club-local
 }
 
 interface SeriesBlockRow {
@@ -64,8 +64,8 @@ function buildBlockRows(
     coach_id: coachId,
     series_id: seriesId,
     location_ids: input.locationIds,
-    start_time: toLocalTimestamp(combineDateAndTime(day, input.startTime)),
-    end_time: toLocalTimestamp(combineDateAndTime(day, input.endTime)),
+    start_time: formatDbTimestamp(combineClubDateAndTime(day, input.startTime)),
+    end_time: formatDbTimestamp(combineClubDateAndTime(day, input.endTime)),
   }));
 }
 
@@ -90,8 +90,8 @@ export async function createAvailabilityBlock(input: AvailabilityBlockInput): Pr
     .insert({
       coach_id: coachId,
       location_ids: input.locationIds,
-      start_time: toLocalTimestamp(input.startTime),
-      end_time: toLocalTimestamp(input.endTime),
+      start_time: formatDbTimestamp(input.startTime),
+      end_time: formatDbTimestamp(input.endTime),
     })
     .select(AVAILABILITY_BLOCK_COLUMNS)
     .single();
@@ -141,7 +141,7 @@ export async function createAvailabilitySeries(
     weekdays: input.frequency === "Weekly" ? input.weekdays : null,
     dayOfMonth: input.frequency === "Monthly" ? input.dayOfMonth : null,
   };
-  const occurrences = generateOccurrences(pattern, input.startDate, input.endDate);
+  const occurrences = generateOccurrences(pattern, parseDateOnly(input.startDate), parseDateOnly(input.endDate));
   if (occurrences.length === 0) {
     throw new Error("Until date must be on or after the start date.");
   }
@@ -157,8 +157,8 @@ export async function createAvailabilitySeries(
       start_time: `${input.startTime}:00`,
       end_time: `${input.endTime}:00`,
       location_ids: input.locationIds,
-      start_date: formatDateOnly(input.startDate),
-      end_date: formatDateOnly(input.endDate),
+      start_date: input.startDate,
+      end_date: input.endDate,
     })
     .select("id")
     .single();
@@ -211,7 +211,7 @@ export async function updateAvailabilitySeries(
       start_time: `${input.startTime}:00`,
       end_time: `${input.endTime}:00`,
       location_ids: input.locationIds,
-      end_date: formatDateOnly(input.endDate),
+      end_date: input.endDate,
     })
     .eq("id", seriesId)
     .eq("coach_id", coachId)
@@ -228,7 +228,7 @@ export async function updateAvailabilitySeries(
     .delete()
     .eq("series_id", seriesId)
     .eq("coach_id", coachId)
-    .gt("start_time", toLocalTimestamp(now));
+    .gt("start_time", formatDbTimestamp(now));
 
   if (deleteError) {
     console.error("updateAvailabilitySeries (clearing future blocks) failed:", deleteError);
@@ -241,8 +241,8 @@ export async function updateAvailabilitySeries(
     weekdays: input.weekdays,
     dayOfMonth: input.dayOfMonth,
   };
-  const occurrences = generateOccurrences(pattern, now, input.endDate).filter(
-    (day) => combineDateAndTime(day, input.startTime) > now,
+  const occurrences = generateOccurrences(pattern, toClubZoned(now), parseDateOnly(input.endDate)).filter(
+    (day) => combineClubDateAndTime(day, input.startTime) > now,
   );
 
   if (occurrences.length > 0) {
@@ -278,7 +278,7 @@ export interface AvailabilitySeriesMeta {
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
   locationIds: string[];
-  endDate: Date;
+  endDate: string; // "YYYY-MM-DD", club-local
 }
 
 // Lets the Calendar's edit dialog lazily load the authoritative recurrence
@@ -310,7 +310,7 @@ export async function getAvailabilitySeriesMeta(seriesId: string): Promise<Avail
     startTime: data.start_time.slice(0, 5),
     endTime: data.end_time.slice(0, 5),
     locationIds: data.location_ids,
-    endDate: parseDateOnly(data.end_date),
+    endDate: data.end_date,
   };
 }
 
@@ -332,8 +332,8 @@ export async function updateAvailabilityBlock(
     .from("coach_availability_blocks")
     .update({
       location_ids: input.locationIds,
-      start_time: toLocalTimestamp(input.startTime),
-      end_time: toLocalTimestamp(input.endTime),
+      start_time: formatDbTimestamp(input.startTime),
+      end_time: formatDbTimestamp(input.endTime),
     })
     .eq("id", id)
     .eq("coach_id", coachId)

@@ -9,13 +9,11 @@ import { ClassTypeTag } from "@/components/class-type-tag"
 import { RecurringTag } from "@/components/recurring-tag"
 import { OpenClassTag } from "@/components/open-class-tag"
 import { cn } from "@/lib/utils"
+import { formatClubTime } from "@/lib/dates"
 import type { CalendarEvent } from "@/components/calendar/types"
 
 function formatTime(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date)
+  return formatClubTime(date)
 }
 
 function formatDuration(minutes: number): string {
