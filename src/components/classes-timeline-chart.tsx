@@ -10,6 +10,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { Slider } from "@/components/ui/slider"
+import { useHasMounted } from "@/lib/hooks/use-has-mounted"
 import type { DailyClassCount } from "@/lib/mock-data"
 
 interface ClassesTimelineChartProps {
@@ -40,6 +41,7 @@ function formatTooltipLabel(date: Date): string {
 }
 
 export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
+  const hasMounted = useHasMounted()
   const [halfWidth, setHalfWidth] = useState(DEFAULT_HALF_WIDTH)
 
   const visibleData = useMemo(
@@ -49,12 +51,15 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
 
   const tickInterval = visibleData.length > 14 ? Math.ceil(visibleData.length / 10) : 0
 
+  // formatAxisTick renders real Date instants with the runtime's implicit
+  // local timezone — differs between the server's SSR pass (UTC on Vercel)
+  // and the client's hydration pass, so it's deferred until after mount.
   const rangeLabel = useMemo(() => {
-    if (visibleData.length === 0) return ""
+    if (!hasMounted || visibleData.length === 0) return ""
     const first = visibleData[0].date
     const last = visibleData[visibleData.length - 1].date
     return `${formatAxisTick(first)} – ${formatAxisTick(last)}`
-  }, [visibleData])
+  }, [hasMounted, visibleData])
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-300 motion-reduce:animate-none rounded-3xl bg-card p-6">
