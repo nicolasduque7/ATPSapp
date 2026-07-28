@@ -86,7 +86,7 @@ export function StudentProfileDialog({
 }: StudentProfileDialogProps) {
   return (
     <Dialog open={!!student} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader className="sr-only">
           <DialogTitle>{mode === "create" ? "Add student" : "Edit student"}</DialogTitle>
         </DialogHeader>

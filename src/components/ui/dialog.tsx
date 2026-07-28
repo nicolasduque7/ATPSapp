@@ -33,7 +33,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-card p-6 outline-none",
+          "fixed top-1/2 left-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl bg-card outline-none",
           "transition-all duration-200 motion-reduce:transition-none",
           "data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
           "data-[ending-style]:scale-95 data-[ending-style]:opacity-0",
@@ -41,7 +41,7 @@ function DialogContent({
         )}
         {...props}
       >
-        {children}
+        <div className="dialog-scroll max-h-[85vh] overflow-y-auto p-6">{children}</div>
         {showClose && (
           <DialogPrimitive.Close
             aria-label="Close"
