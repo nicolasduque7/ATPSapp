@@ -1,19 +1,10 @@
 "use client"
 
-import { useSyncExternalStore } from "react"
 import { useTheme } from "next-themes"
 import { Moon, Sun } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-
-const emptySubscribe = () => () => {}
-
-// Matches the server-rendered output on first hydration (false), then flips
-// to true once mounted client-side — avoids the next-themes hydration
-// mismatch without a setState-in-effect anti-pattern.
-function useHasMounted(): boolean {
-  return useSyncExternalStore(emptySubscribe, () => true, () => false)
-}
+import { useHasMounted } from "@/lib/hooks/use-has-mounted"
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()

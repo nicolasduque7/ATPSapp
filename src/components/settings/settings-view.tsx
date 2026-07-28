@@ -6,6 +6,7 @@ import { Clock, Plus, Repeat } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useHasMounted } from "@/lib/hooks/use-has-mounted"
 import { getLocationColorStyle } from "@/lib/location-colors"
 import { ordinal, pluralUnit } from "@/components/calendar/recurrence-fields"
 import { AvailabilityEditDialog } from "@/components/calendar/availability-edit-dialog"
@@ -34,7 +35,7 @@ function formatTime(hhmm: string): string {
 
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-function formatCadenceSummary(series: AvailabilitySeriesSummary): string {
+function formatCadenceSummary(series: AvailabilitySeriesSummary, hasMounted: boolean): string {
   const cadence =
     series.intervalCount === 1
       ? series.frequency
@@ -46,7 +47,16 @@ function formatCadenceSummary(series: AvailabilitySeriesSummary): string {
         ? ordinal(series.dayOfMonth ?? 1)
         : null
 
-  return [cadence, pattern, `${formatTime(series.startTime)} – ${formatTime(series.endTime)}`, `until ${format(series.endDate, "MMM d, yyyy")}`]
+  return [
+    cadence,
+    pattern,
+    `${formatTime(series.startTime)} – ${formatTime(series.endTime)}`,
+    // series.endDate is a real Date instant formatted with the runtime's
+    // implicit local timezone — differs between the server's SSR pass (UTC
+    // on Vercel) and the client's hydration pass, so it's deferred until
+    // after mount to avoid a hydration mismatch.
+    hasMounted ? `until ${format(series.endDate, "MMM d, yyyy")}` : null,
+  ]
     .filter(Boolean)
     .join(" · ")
 }
@@ -70,6 +80,7 @@ function LocationChips({ locationIds, locations }: { locationIds: string[]; loca
 }
 
 export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOffBlocks, locations }: SettingsViewProps) {
+  const hasMounted = useHasMounted()
   const [series, setSeries] = useState(initialSeries)
   const [oneOffBlocks, setOneOffBlocks] = useState(initialOneOffBlocks)
   const [dialogTarget, setDialogTarget] = useState<AvailabilityDialogTarget | null>(null)
@@ -195,7 +206,7 @@ export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOf
                   <Repeat className="size-4 stroke-[1.75]" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-foreground">{formatCadenceSummary(s)}</span>
+                  <span className="text-sm font-medium text-foreground">{formatCadenceSummary(s, hasMounted)}</span>
                   <LocationChips locationIds={s.locationIds} locations={locations} />
                 </div>
               </button>
@@ -212,8 +223,9 @@ export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOf
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium text-foreground">
-                    {format(block.startTime, "EEE, MMM d")} · {format(block.startTime, "h:mm a")} –{" "}
-                    {format(block.endTime, "h:mm a")}
+                    {hasMounted
+                      ? `${format(block.startTime, "EEE, MMM d")} · ${format(block.startTime, "h:mm a")} – ${format(block.endTime, "h:mm a")}`
+                      : " "}
                   </span>
                   <LocationChips locationIds={block.locationIds} locations={locations} />
                 </div>

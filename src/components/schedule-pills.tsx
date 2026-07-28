@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useHasMounted } from "@/lib/hooks/use-has-mounted"
 import type { ClassInstance } from "@/lib/mock-data"
 
 interface ScheduleEntity {
@@ -34,6 +35,7 @@ export function SchedulePills({
   entityIdKey = "studentId",
   calendarHref = "/calendar",
 }: SchedulePillsProps) {
+  const hasMounted = useHasMounted()
   const [now, setNow] = useState(() => new Date())
   const [canScrollRight, setCanScrollRight] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -59,7 +61,7 @@ export function SchedulePills({
   const sorted = [...classes].sort(
     (a, b) => a.startTime.getTime() - b.startTime.getTime()
   )
-  const completedCount = sorted.filter((c) => now >= c.endTime).length
+  const completedCount = hasMounted ? sorted.filter((c) => now >= c.endTime).length : 0
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-300 motion-reduce:animate-none rounded-3xl bg-card p-6">
@@ -95,7 +97,7 @@ export function SchedulePills({
           >
             <div className="flex items-center gap-4">
               {sorted.map((c, index) => {
-                const completed = now >= c.endTime
+                const completed = hasMounted && now >= c.endTime
                 const entity = entityById.get(c[entityIdKey])
                 return (
                   <div
@@ -116,7 +118,7 @@ export function SchedulePills({
                         completed ? "font-semibold text-foreground" : "text-muted-foreground"
                       )}
                     >
-                      {formatPillTime(c.startTime)}
+                      {hasMounted ? formatPillTime(c.startTime) : ""}
                     </span>
                   </div>
                 )

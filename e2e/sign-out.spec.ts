@@ -14,7 +14,7 @@ test("coach can sign out", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/login/);
 
-  // Signed out — protected pages should bounce back to /login.
+  // Signed out — root now bounces to the coach/student chooser, not /login.
   await page.goto("/");
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page).toHaveURL(/\/signup/);
 });

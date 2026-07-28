@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight } from "lucide-react"
 
+import { useHasMounted } from "@/lib/hooks/use-has-mounted"
 import { Avatar } from "@/components/avatar"
 import { Button } from "@/components/ui/button"
 import { NextClassCountdown } from "@/components/next-class-countdown"
@@ -48,6 +49,7 @@ function formatDayLabel(date: Date): string {
 
 export function NextClassCard({ nextClass, students, locations }: NextClassCardProps) {
   const router = useRouter()
+  const hasMounted = useHasMounted()
   const [editingEvent, setEditingEvent] = useState<CalendarClassEvent | null>(null)
   const [notifyOpen, setNotifyOpen] = useState(false)
 
@@ -93,10 +95,14 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
 
           <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 pr-24">
             <p className="font-heading text-2xl font-bold">
-              {formatDayLabel(nextClass.startTime)} · {formatTime(nextClass.startTime)}
+              {hasMounted
+                ? `${formatDayLabel(nextClass.startTime)} · ${formatTime(nextClass.startTime)}`
+                : " "}
             </p>
             <p className="text-sm text-primary-foreground/85">
-              – {formatTime(nextClass.endTime)} · {formatDurationHours(nextClass.durationMinutes)}
+              {hasMounted
+                ? `– ${formatTime(nextClass.endTime)} · ${formatDurationHours(nextClass.durationMinutes)}`
+                : " "}
             </p>
           </div>
 

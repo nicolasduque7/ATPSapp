@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 
+import { useHasMounted } from "@/lib/hooks/use-has-mounted"
+
 interface NextClassCountdownProps {
   startTime: Date
 }
@@ -15,6 +17,7 @@ function formatCountdown(startTime: Date, now: Date): string {
 }
 
 export function NextClassCountdown({ startTime }: NextClassCountdownProps) {
+  const hasMounted = useHasMounted()
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -22,5 +25,6 @@ export function NextClassCountdown({ startTime }: NextClassCountdownProps) {
     return () => clearInterval(interval)
   }, [])
 
+  if (!hasMounted) return null
   return <>in {formatCountdown(startTime, now)}</>
 }

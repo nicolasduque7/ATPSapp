@@ -197,6 +197,12 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
   signup problem above worse for one-click sign-in specifically. Re-enable
   once there's a safeguard for that (e.g. a post-signup "not what you
   wanted? undo" step), not before.
+- Unauthenticated visits to the root `/` land on the coach/student chooser
+  (`/signup`) rather than the plain login form — it's the real "who are you"
+  entry point for a first-time visitor. Deep links to other protected pages
+  (e.g. a stale `/calendar` bookmark, or a session expiring mid-page) still
+  redirect to `/login` as before, since that's a returning-user scenario, not
+  a first visit.
 
 ## Planned (not yet built)
 - Re-enable Google sign-in once the accidental-coach-account risk (see

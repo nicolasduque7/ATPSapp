@@ -8,6 +8,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css"
 import "@/components/calendar/calendar-overrides.css"
 
 import { Button } from "@/components/ui/button"
+import { useHasMounted } from "@/lib/hooks/use-has-mounted"
 import { CalendarToolbar } from "@/components/calendar/calendar-toolbar"
 import { CalendarEventTile, CalendarEventTileCompact } from "@/components/calendar/calendar-event"
 import { CoachFilterPopover } from "@/components/calendar/coach-filter-popover"
@@ -52,6 +53,7 @@ export function StudentCalendar({
   locations,
   studentProfile,
 }: StudentCalendarProps) {
+  const hasMounted = useHasMounted()
   const [view, setView] = useState<CalendarViewKey>("week")
   const [date, setDate] = useState(() => new Date())
   const [classEvents, setClassEvents] = useState(initialClassEvents)
@@ -244,25 +246,29 @@ export function StudentCalendar({
           className="courtside-calendar h-[1150px] rounded-3xl bg-card p-4 sm:p-6"
           data-calendar-view={view}
         >
-          <Calendar<CalendarEvent>
-            localizer={localizer}
-            events={displayedEvents}
-            view={view as View}
-            onView={(nextView) => setView(nextView as unknown as CalendarViewKey)}
-            date={date}
-            onNavigate={setDate}
-            onSelectEvent={handleSelectEvent}
-            eventPropGetter={eventPropGetter}
-            views={CALENDAR_VIEWS}
-            components={components}
-            min={MIN_TIME}
-            max={MAX_TIME}
-            step={30}
-            timeslots={2}
-            dayLayoutAlgorithm="no-overlap"
-            popup
-            style={{ height: "100%" }}
-          />
+          {hasMounted ? (
+            <Calendar<CalendarEvent>
+              localizer={localizer}
+              events={displayedEvents}
+              view={view as View}
+              onView={(nextView) => setView(nextView as unknown as CalendarViewKey)}
+              date={date}
+              onNavigate={setDate}
+              onSelectEvent={handleSelectEvent}
+              eventPropGetter={eventPropGetter}
+              views={CALENDAR_VIEWS}
+              components={components}
+              min={MIN_TIME}
+              max={MAX_TIME}
+              step={30}
+              timeslots={2}
+              dayLayoutAlgorithm="no-overlap"
+              popup
+              style={{ height: "100%" }}
+            />
+          ) : (
+            <div className="h-full animate-pulse rounded-2xl bg-muted motion-reduce:animate-none" />
+          )}
         </div>
       )}
 

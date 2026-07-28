@@ -37,10 +37,20 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     pathname.startsWith("/auth/callback") ||
     pathname.startsWith("/invite");
 
-  if (!user && !isPublicRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+  if (!user) {
+    // Unauthenticated first visits to the root land on the coach/student
+    // chooser (the real "who are you" entry point); deep links to other
+    // protected pages still bounce to the plain sign-in form.
+    if (pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/signup";
+      return NextResponse.redirect(url);
+    }
+    if (!isPublicRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
   }
 
   if (user && (pathname.startsWith("/login") || pathname.startsWith("/signup"))) {
