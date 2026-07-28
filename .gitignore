@@ -45,3 +45,8 @@ next-env.d.ts
 
 # playwright MCP debug output
 .playwright-mcp/
+
+# playwright e2e test output
+/playwright-report/
+/test-results/
+/e2e/.auth/

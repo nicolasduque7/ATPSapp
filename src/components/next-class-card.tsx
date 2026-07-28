@@ -84,10 +84,10 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
 
   return (
     <div className="relative animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 motion-reduce:animate-none rounded-3xl bg-primary p-6 text-primary-foreground">
-      <p className="text-sm text-primary-foreground/70">Next class</p>
+      <p className="text-sm text-primary-foreground/85">Next class</p>
       {nextClass ? (
         <>
-          <span className="absolute top-6 right-6 inline-flex items-center rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-medium text-primary-foreground">
+          <span className="absolute top-6 right-6 inline-flex items-center rounded-full bg-primary-foreground/10 px-3 py-1 text-xs font-medium text-primary-foreground">
             <NextClassCountdown startTime={nextClass.startTime} />
           </span>
 
@@ -95,14 +95,14 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
             <p className="font-heading text-2xl font-bold">
               {formatDayLabel(nextClass.startTime)} · {formatTime(nextClass.startTime)}
             </p>
-            <p className="text-sm text-primary-foreground/70">
+            <p className="text-sm text-primary-foreground/85">
               – {formatTime(nextClass.endTime)} · {formatDurationHours(nextClass.durationMinutes)}
             </p>
           </div>
 
           {student && (
             <div className="mt-4 flex items-center gap-3">
-              <Avatar name={student.name} className="bg-primary-foreground/15 text-primary-foreground" />
+              <Avatar name={student.name} className="bg-primary-foreground/10 text-primary-foreground" />
               <div className="flex flex-1 flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-heading text-sm font-bold text-primary-foreground">
@@ -121,11 +121,11 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {location && (
-                    <span className="inline-flex w-fit items-center rounded-full bg-primary-foreground/15 px-2 py-0.5 text-[9px] font-medium text-primary-foreground/90">
+                    <span className="inline-flex w-fit items-center rounded-full bg-primary-foreground/10 px-2 py-0.5 text-[9px] font-medium text-primary-foreground">
                       {location.name}
                     </span>
                   )}
-                  <span className="inline-flex w-fit items-center rounded-full bg-primary-foreground/15 px-2 py-0.5 text-[9px] font-medium text-primary-foreground/90">
+                  <span className="inline-flex w-fit items-center rounded-full bg-primary-foreground/10 px-2 py-0.5 text-[9px] font-medium text-primary-foreground">
                     {student.level}
                   </span>
                 </div>
