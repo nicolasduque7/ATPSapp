@@ -70,4 +70,31 @@ test("coach can book a class and it appears on the calendar", async ({ page }) =
   // the test ends avoids the browser context closing while that request is
   // still in flight, which would cancel it and leave the class orphaned.
   await page.getByRole("button", { name: "Got it" }).click();
+
+  // Clean up: students/locations are shared, club-wide tables (see
+  // PROJECT.md), and the class referencing these is already gone above, so
+  // it's now safe to delete the student and location this test also
+  // created as prerequisites — otherwise every run leaves two more rows
+  // behind that other coaches would see too.
+  // The dialog only unmounts once each delete's server round trip actually
+  // resolves — waiting for it is the one reliable signal here. The
+  // background row's own visibility check fires early (the dialog's
+  // aria-hidden overlay already hides it while still open) and so does the
+  // "Confirm delete" button's (its label flips to "Deleting…" the instant
+  // the click handler runs, well before the request resolves) — both would
+  // let the test end, and the browser context tearing down mid-request
+  // cancels it, leaving the row orphaned.
+  await page.goto("/students");
+  await page.getByRole("button", { name: new RegExp(studentName) }).click();
+  await page.getByRole("button", { name: "Delete student" }).click();
+  await page.getByRole("button", { name: "Confirm delete" }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(studentName) })).not.toBeVisible();
+
+  await page.goto("/locations");
+  await page.getByRole("button", { name: new RegExp(locationName) }).click();
+  await page.getByRole("button", { name: "Delete location" }).click();
+  await page.getByRole("button", { name: "Confirm delete" }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(locationName) })).not.toBeVisible();
 });
