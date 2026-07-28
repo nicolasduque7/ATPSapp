@@ -10,9 +10,10 @@ import { signOut } from "@/lib/actions/auth"
 interface AccountMenuProps {
   name: string
   email: string
+  side?: "right" | "bottom"
 }
 
-export function AccountMenu({ name, email }: AccountMenuProps) {
+export function AccountMenu({ name, email, side = "right" }: AccountMenuProps) {
   return (
     <Popover>
       <PopoverTrigger
@@ -22,7 +23,7 @@ export function AccountMenu({ name, email }: AccountMenuProps) {
       >
         <Avatar name={name} />
       </PopoverTrigger>
-      <PopoverContent side="right" align="end" className="w-56">
+      <PopoverContent side={side} align="end" className="w-56">
         <div className="flex flex-col gap-0.5 px-1 pb-2">
           <p className="truncate font-heading text-sm font-bold text-foreground">{name}</p>
           <p className="truncate text-xs text-muted-foreground">{email}</p>

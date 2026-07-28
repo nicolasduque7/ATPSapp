@@ -12,7 +12,7 @@ export function AppShell({ children, sidebar = <Sidebar /> }: AppShellProps) {
   return (
     <div className="relative flex min-h-screen gap-4 bg-background p-4">
       {sidebar}
-      <main className="min-w-0 flex-1 pt-16 pb-1">{children}</main>
+      <main className="min-w-0 flex-1 pt-16 pb-24 md:pb-1 md:pl-20">{children}</main>
       <SignOutButton />
     </div>
   )
