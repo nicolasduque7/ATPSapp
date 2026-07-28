@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts"
+import { Area, AreaChart, CartesianGrid, LabelList, XAxis, YAxis, type RenderableText } from "recharts"
 
 import {
   ChartContainer,
@@ -10,7 +10,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { Slider } from "@/components/ui/slider"
-import { useHasMounted } from "@/lib/hooks/use-has-mounted"
+import { formatClubDate } from "@/lib/dates"
 import type { DailyClassCount } from "@/lib/mock-data"
 
 interface ClassesTimelineChartProps {
@@ -29,19 +29,20 @@ const chartConfig = {
 } satisfies ChartConfig
 
 function formatAxisTick(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date)
+  return formatClubDate(date, "MMM d")
 }
 
 function formatTooltipLabel(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  }).format(date)
+  return formatClubDate(date, "EEEE, MMM d")
+}
+
+interface DotProps {
+  cx?: number
+  cy?: number
+  index?: number
 }
 
 export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
-  const hasMounted = useHasMounted()
   const [halfWidth, setHalfWidth] = useState(DEFAULT_HALF_WIDTH)
 
   const visibleData = useMemo(
@@ -51,15 +52,57 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
 
   const tickInterval = visibleData.length > 14 ? Math.ceil(visibleData.length / 10) : 0
 
-  // formatAxisTick renders real Date instants with the runtime's implicit
-  // local timezone — differs between the server's SSR pass (UTC on Vercel)
-  // and the client's hydration pass, so it's deferred until after mount.
   const rangeLabel = useMemo(() => {
-    if (!hasMounted || visibleData.length === 0) return ""
+    if (visibleData.length === 0) return ""
     const first = visibleData[0].date
     const last = visibleData[visibleData.length - 1].date
     return `${formatAxisTick(first)} – ${formatAxisTick(last)}`
-  }, [hasMounted, visibleData])
+  }, [visibleData])
+
+  function renderDot({ cx, cy, index }: DotProps) {
+    if (cx === undefined || cy === undefined || index === undefined) return <g key={`${cx}-${cy}`} />
+    const isToday = visibleData[index].dayOffset === 0
+    return (
+      <circle
+        key={visibleData[index].dayOffset}
+        cx={cx}
+        cy={cy}
+        r={isToday ? 5 : 3.5}
+        fill={isToday ? "var(--primary)" : "color-mix(in oklch, var(--primary) 55%, transparent)"}
+        stroke="var(--card)"
+        strokeWidth={2}
+      />
+    )
+  }
+
+  function renderCountLabel({
+    x,
+    y,
+    value,
+    index,
+  }: {
+    x?: string | number
+    y?: string | number
+    value?: RenderableText
+    index?: number
+  }): React.ReactElement | null {
+    if (x === undefined || y === undefined || index === undefined) return null
+    const isToday = visibleData[index].dayOffset === 0
+    return (
+      <text
+        x={x}
+        y={Number(y) - 10}
+        textAnchor="middle"
+        className={
+          isToday
+            ? "fill-foreground text-[11px] font-bold"
+            : "fill-muted-foreground text-[10px] font-medium"
+        }
+      >
+        {value}
+      </text>
+    )
+  }
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-300 motion-reduce:animate-none rounded-3xl bg-card p-6">
@@ -72,7 +115,7 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
       </p>
 
       <ChartContainer config={chartConfig} className="mt-6 aspect-auto h-56 w-full">
-        <BarChart data={visibleData} margin={{ left: 0, right: 0, top: 8, bottom: 0 }}>
+        <AreaChart data={visibleData} margin={{ left: 0, right: 0, top: 20, bottom: 0 }}>
           <CartesianGrid vertical={false} className="stroke-border" />
           <XAxis
             dataKey="date"
@@ -85,7 +128,7 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
           />
           <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={24} fontSize={11} />
           <ChartTooltip
-            cursor={{ fill: "var(--muted)" }}
+            cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: 3 }}
             content={
               <ChartTooltipContent
                 labelFormatter={(_, payload) =>
@@ -94,25 +137,23 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
               />
             }
           />
-          <Bar
+          <Area
             dataKey="count"
-            radius={[4, 4, 0, 0]}
-            maxBarSize={28}
+            type="monotone"
+            stroke="var(--primary)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="var(--primary)"
+            fillOpacity={0.1}
+            dot={renderDot}
+            activeDot={{ r: 5, fill: "var(--primary)", stroke: "var(--card)", strokeWidth: 2 }}
             animationDuration={300}
             animationEasing="ease-out"
           >
-            {visibleData.map((d) => (
-              <Cell
-                key={d.dayOffset}
-                fill={
-                  d.dayOffset === 0
-                    ? "var(--primary)"
-                    : "color-mix(in oklch, var(--primary) 45%, transparent)"
-                }
-              />
-            ))}
-          </Bar>
-        </BarChart>
+            <LabelList dataKey="count" content={renderCountLabel} />
+          </Area>
+        </AreaChart>
       </ChartContainer>
 
       <div className="mt-6 flex items-center gap-4">

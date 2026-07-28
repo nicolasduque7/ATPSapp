@@ -49,7 +49,8 @@ Shows: next upcoming class (coach, location, time — with a "Book a class"
 button always available top-right), today's classes completed/remaining
 (activity ring), a stroke-strength radar chart (the 6 ratings above), hours
 trained today, this week's classes/coaches-trained-with/busiest-day, a
-today's-schedule strip, and the same classes-timeline bar chart with
+today's-schedule strip, and the same classes-timeline chart (a line chart
+with a dot and count label per day, today's dot highlighted) with
 time-range slider as the coach dashboard. A student can click into their
 next class to edit or delete it.
 
