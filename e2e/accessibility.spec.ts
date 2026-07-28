@@ -39,6 +39,13 @@ async function checkPage(page: Page, path: string): Promise<void> {
   expect(consoleErrors, `Console errors on ${path}:\n${consoleErrors.join("\n")}`).toEqual([]);
 
   const knownGaps = KNOWN_LIBRARY_GAPS[path] ?? [];
+  // Entrance animations (fade-in/slide-in, up to ~600ms including delay)
+  // can still be mid-transition here — axe would then sample a transient,
+  // partially-transparent color and report a false contrast violation.
+  // Wait for every running CSS animation to finish before scanning.
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => a.playState !== "running")
+  );
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa"])
     .disableRules(knownGaps)
