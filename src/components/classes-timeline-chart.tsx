@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Area, AreaChart, CartesianGrid, LabelList, XAxis, YAxis, type RenderableText } from "recharts"
+import { Area, AreaChart, CartesianGrid, LabelList, XAxis, YAxis, type DotItemDotProps, type LabelProps } from "recharts"
 
 import {
   ChartContainer,
@@ -36,12 +36,6 @@ function formatTooltipLabel(date: Date): string {
   return formatClubDate(date, "EEEE, MMM d")
 }
 
-interface DotProps {
-  cx?: number
-  cy?: number
-  index?: number
-}
-
 export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
   const [halfWidth, setHalfWidth] = useState(DEFAULT_HALF_WIDTH)
 
@@ -59,12 +53,13 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
     return `${formatAxisTick(first)} – ${formatAxisTick(last)}`
   }, [visibleData])
 
-  function renderDot({ cx, cy, index }: DotProps) {
-    if (cx === undefined || cy === undefined || index === undefined) return <g key={`${cx}-${cy}`} />
-    const isToday = visibleData[index].dayOffset === 0
+  function renderDot({ cx, cy, payload }: DotItemDotProps) {
+    if (cx === undefined || cy === undefined || payload == null) return <g key={`${cx}-${cy}`} />
+    const point = payload as DailyClassCount
+    const isToday = point.dayOffset === 0
     return (
       <circle
-        key={visibleData[index].dayOffset}
+        key={point.dayOffset}
         cx={cx}
         cy={cy}
         r={isToday ? 5 : 3.5}
@@ -75,18 +70,14 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
     )
   }
 
-  function renderCountLabel({
-    x,
-    y,
-    value,
-    index,
-  }: {
-    x?: string | number
-    y?: string | number
-    value?: RenderableText
-    index?: number
-  }): React.ReactElement | null {
+  function renderCountLabel({ x, y, value, index }: LabelProps): React.ReactElement | null {
     if (x === undefined || y === undefined || index === undefined) return null
+    // Unlike the `dot` render prop above, recharts' LabelList doesn't forward
+    // `payload` to this callback (it filters entries through an SVG/ARIA
+    // attribute allow-list first) — index is the only per-point key we get,
+    // and it isn't guaranteed to stay within visibleData's bounds while the
+    // slider changes halfWidth mid-animation.
+    if (index < 0 || index >= visibleData.length) return null
     const isToday = visibleData[index].dayOffset === 0
     return (
       <text
