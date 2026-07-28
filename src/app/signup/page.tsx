@@ -1,4 +1,4 @@
-import { SignupForm } from "@/components/signup-form";
+import { SignupChooser } from "@/components/signup-chooser";
 
 export default function SignupPage(): React.JSX.Element {
   return (
@@ -6,9 +6,9 @@ export default function SignupPage(): React.JSX.Element {
       <div className="w-full max-w-sm rounded-3xl bg-card p-8">
         <div className="mb-6 flex flex-col gap-1">
           <h1 className="font-heading text-2xl font-bold text-foreground">CourtSide</h1>
-          <p className="text-sm text-muted-foreground">Create your coach account.</p>
+          <p className="text-sm text-muted-foreground">Sign up to get started.</p>
         </div>
-        <SignupForm />
+        <SignupChooser />
       </div>
     </div>
   );

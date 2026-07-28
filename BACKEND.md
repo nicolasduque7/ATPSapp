@@ -195,6 +195,31 @@ if you ever see a public, pre-login page "not working" (redirecting to
   (`src/app/student/page.tsx`) — today just a placeholder ("your account is
   set up") since the real student Dashboard/Calendar don't exist yet.
 
+**Why `/signup` is a chooser, not a bare form:** a student who ends up on a
+generic "create an account" form (instead of using their invite link) would
+trigger the `handle_new_user()` account-creation trigger with no invite context, giving
+them a real `role: 'coach'` profile under their email — and since
+`auth.users.email` is unique, that permanently blocks them from ever
+redeeming their real invite with that same email. `src/app/signup/page.tsx`
+now renders `src/components/signup-chooser.tsx`, which asks "Coach or
+Student?" before showing the actual signup form (`signup-form.tsx`); the
+student option shows no form, just a pointer to their invite link. This is
+UI-only — no schema, RLS, or trigger change.
+
+**Google OAuth status:** `src/components/google-auth-button.tsx`,
+`signInWithGoogle` (`src/lib/actions/auth.ts`), and
+`src/app/auth/callback/route.ts` are fully built and were verified working
+end-to-end, but are currently unreferenced by any page — deliberately
+dormant, not dead code to delete. It's deferred rather than shipped because
+Supabase creates the `auth.users` row (and fires `handle_new_user()`) the
+instant the OAuth handshake succeeds, with no app-side "confirm before
+creating" step possible the way a password form allows — which makes the
+accidental-coach-signup problem above worse for a one-click flow
+specifically. The chooser above mitigates this for the password flow; Google
+sign-in should stay off until it has its own safeguard (e.g. detecting a
+brand-new sign-up in `/auth/callback` and offering an undo before dropping
+the user into the dashboard).
+
 ---
 
 ## 5. What a linked student can actually see and do (RLS)

@@ -7,7 +7,6 @@ import { MailCheck } from "lucide-react"
 import { signup, type SignupState } from "@/app/signup/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { GoogleAuthButton } from "@/components/google-auth-button"
 
 const initialState: SignupState = {}
 
@@ -37,14 +36,6 @@ export function SignupForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      <GoogleAuthButton label="Sign up with Google" />
-
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs text-muted-foreground">or</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
       <form action={action} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-name`} className="text-xs font-medium text-muted-foreground">

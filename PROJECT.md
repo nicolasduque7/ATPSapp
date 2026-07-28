@@ -179,9 +179,29 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
   `type` string + a flexible payload, not a bespoke table per kind) so
   future notification types — e.g. an edit/delete alert — can be added
   without a new migration. See `BACKEND.md` section 12.
+- `/signup` is a **coach/student chooser**, not a bare form: it asks "I'm a
+  Coach" or "I'm a Student" before showing anything else. The coach path
+  shows the existing signup form; the student path shows no form at all —
+  just a message pointing them to the invite link their coach sent, since
+  students can never self-signup (see the invite system above). This
+  exists because a student accidentally landing on a generic signup form
+  would create a real coach account under their email, permanently
+  blocking that email from ever redeeming their actual invite (Supabase
+  emails are unique) — a support cleanup, not just a wrong screen.
+- **Google sign-in is built and working end-to-end but intentionally not
+  shown in the UI** (`GoogleAuthButton`, `signInWithGoogle`, and the
+  `/auth/callback` route all still exist and work, just unreferenced by any
+  page). It's deferred, not abandoned: Supabase creates the account the
+  instant the OAuth handshake succeeds, with no "confirm first" step
+  possible the way a password form allows — which made the accidental-coach-
+  signup problem above worse for one-click sign-in specifically. Re-enable
+  once there's a safeguard for that (e.g. a post-signup "not what you
+  wanted? undo" step), not before.
 
 ## Planned (not yet built)
-Nothing currently planned — this is where the next roadmap item goes.
+- Re-enable Google sign-in once the accidental-coach-account risk (see
+  "Resolved decisions" above) has a proper safeguard, not just the
+  coach/student chooser.
 
 ## Non-goals (v1)
 - Payments, messaging, public booking page (later).

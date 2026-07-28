@@ -6,7 +6,6 @@ import Link from "next/link"
 import { login, type LoginState } from "@/app/login/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { GoogleAuthButton } from "@/components/google-auth-button"
 
 const initialState: LoginState = {}
 
@@ -16,14 +15,6 @@ export function LoginForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      <GoogleAuthButton />
-
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs text-muted-foreground">or</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
       <form action={action} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-email`} className="text-xs font-medium text-muted-foreground">
