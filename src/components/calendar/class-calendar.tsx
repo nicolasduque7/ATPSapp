@@ -162,14 +162,16 @@ export function ClassCalendar({
   async function handleSave(submission: ClassFormSubmission) {
     switch (submission.kind) {
       case "one-off": {
-        const created = await createClass(submission.input)
-        const mapped = mapClassInstanceToEvent(created, students, locations, coaches)
+        const result = await createClass(submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = mapClassInstanceToEvent(result.data, students, locations, coaches)
         if (mapped) setClassEvents((prev) => [...prev, { kind: "class" as const, ...mapped }])
         return
       }
       case "series-create": {
-        const created = await createClassSeries(submission.input)
-        const mapped = created.flatMap((instance) => {
+        const result = await createClassSeries(submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = result.data.flatMap((instance) => {
           const event = mapClassInstanceToEvent(instance, students, locations, coaches)
           return event ? [{ kind: "class" as const, ...event }] : []
         })
@@ -178,8 +180,9 @@ export function ClassCalendar({
       }
       case "instance-edit": {
         if (!selectedEvent) return
-        const updated = await updateClassInstance(selectedEvent.id, submission.input)
-        const mapped = mapClassInstanceToEvent(updated, students, locations, coaches)
+        const result = await updateClassInstance(selectedEvent.id, submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = mapClassInstanceToEvent(result.data, students, locations, coaches)
         if (mapped) {
           setClassEvents((prev) => prev.map((e) => (e.id === mapped.id ? { kind: "class" as const, ...mapped } : e)))
         }
@@ -187,8 +190,9 @@ export function ClassCalendar({
         return
       }
       case "series-edit": {
-        const updated = await updateClassSeries(submission.seriesId, submission.input)
-        const mapped = updated.flatMap((instance) => {
+        const result = await updateClassSeries(submission.seriesId, submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = result.data.flatMap((instance) => {
           const event = mapClassInstanceToEvent(instance, students, locations, coaches)
           return event ? [{ kind: "class" as const, ...event }] : []
         })
@@ -206,10 +210,12 @@ export function ClassCalendar({
     const target = classEvents.find((e) => e.id === eventId)
     if (options?.deleteSeries && target?.resource.seriesId) {
       const seriesId = target.resource.seriesId
-      await deleteClassSeries(seriesId)
+      const result = await deleteClassSeries(seriesId)
+      if (!result.ok) throw new Error(result.error)
       setClassEvents((prev) => prev.filter((e) => e.resource.seriesId !== seriesId))
     } else {
-      await deleteClassInstance(eventId)
+      const result = await deleteClassInstance(eventId)
+      if (!result.ok) throw new Error(result.error)
       setClassEvents((prev) => prev.filter((e) => e.id !== eventId))
     }
     setSelectedEvent(null)
@@ -219,16 +225,18 @@ export function ClassCalendar({
   async function handleSaveAvailability(submission: AvailabilityFormSubmission) {
     switch (submission.kind) {
       case "one-off-create": {
-        const created = await createAvailabilityBlock(submission.input)
+        const result = await createAvailabilityBlock(submission.input)
+        if (!result.ok) throw new Error(result.error)
         setAvailabilityEvents((prev) => [
           ...prev,
-          { kind: "availability" as const, ...mapAvailabilityBlockToEvent(created, coaches, locations) },
+          { kind: "availability" as const, ...mapAvailabilityBlockToEvent(result.data, coaches, locations) },
         ])
         return
       }
       case "series-create": {
-        const { blocks } = await createAvailabilitySeries(submission.input)
-        const mapped = blocks.map((block) => ({
+        const result = await createAvailabilitySeries(submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = result.data.blocks.map((block) => ({
           kind: "availability" as const,
           ...mapAvailabilityBlockToEvent(block, coaches, locations),
         }))
@@ -237,16 +245,18 @@ export function ClassCalendar({
       }
       case "one-off-edit": {
         if (editingAvailability?.kind !== "block") return
-        const updated = await updateAvailabilityBlock(editingAvailability.block.id, submission.input)
-        const mapped = mapAvailabilityBlockToEvent(updated, coaches, locations)
+        const result = await updateAvailabilityBlock(editingAvailability.block.id, submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = mapAvailabilityBlockToEvent(result.data, coaches, locations)
         setAvailabilityEvents((prev) =>
           prev.map((e) => (e.id === mapped.id ? { kind: "availability" as const, ...mapped } : e))
         )
         return
       }
       case "series-edit": {
-        const updated = await updateAvailabilitySeries(submission.seriesId, submission.input)
-        const mapped = updated.map((block) => ({
+        const result = await updateAvailabilitySeries(submission.seriesId, submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = result.data.map((block) => ({
           kind: "availability" as const,
           ...mapAvailabilityBlockToEvent(block, coaches, locations),
         }))
@@ -261,10 +271,12 @@ export function ClassCalendar({
 
   async function handleDeleteAvailability(target: { kind: "block" | "series"; id: string }) {
     if (target.kind === "series") {
-      await deleteAvailabilitySeries(target.id)
+      const result = await deleteAvailabilitySeries(target.id)
+      if (!result.ok) throw new Error(result.error)
       setAvailabilityEvents((prev) => prev.filter((e) => e.resource.seriesId !== target.id))
     } else {
-      await deleteAvailabilityBlock(target.id)
+      const result = await deleteAvailabilityBlock(target.id)
+      if (!result.ok) throw new Error(result.error)
       setAvailabilityEvents((prev) => prev.filter((e) => e.id !== target.id))
     }
     setEditingAvailability(null)

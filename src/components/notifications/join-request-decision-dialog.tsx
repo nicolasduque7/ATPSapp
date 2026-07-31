@@ -77,14 +77,14 @@ function JoinRequestDecisionView({
   async function handleDecide(approve: boolean) {
     setDecideError(null)
     setDeciding(true)
-    try {
-      await decideJoinRequest(requestId, approve)
-      onDecided(requestId)
-      onOpenChange(false)
-    } catch (err) {
-      setDecideError(err instanceof Error ? err.message : "Couldn't record your decision. Try again.")
+    const result = await decideJoinRequest(requestId, approve)
+    if (!result.ok) {
+      setDecideError(result.error)
       setDeciding(false)
+      return
     }
+    onDecided(requestId)
+    onOpenChange(false)
   }
 
   if (loadError) {

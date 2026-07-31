@@ -39,16 +39,20 @@ export function LocationsView({ locations: initialLocations }: LocationsViewProp
 
   async function handleSave(input: LocationInput) {
     if (mode === "create") {
-      const created = await createLocation(input)
-      setLocations((prev) => [...prev, created])
+      const result = await createLocation(input)
+      if (!result.ok) throw new Error(result.error)
+      setLocations((prev) => [...prev, result.data])
     } else if (editingLocation) {
-      const saved = await updateLocation(editingLocation.id, input)
+      const result = await updateLocation(editingLocation.id, input)
+      if (!result.ok) throw new Error(result.error)
+      const saved = result.data
       setLocations((prev) => prev.map((location) => (location.id === saved.id ? saved : location)))
     }
   }
 
   async function handleDelete(locationId: string) {
-    await deleteLocation(locationId)
+    const result = await deleteLocation(locationId)
+    if (!result.ok) throw new Error(result.error)
     setLocations((prev) => prev.filter((location) => location.id !== locationId))
     setEditingLocation(null)
   }

@@ -56,9 +56,11 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
   async function handleSave(submission: ClassFormSubmission) {
     if (submission.kind === "instance-edit") {
       if (!editingEvent) return
-      await updateClassInstance(editingEvent.id, submission.input)
+      const result = await updateClassInstance(editingEvent.id, submission.input)
+      if (!result.ok) throw new Error(result.error)
     } else if (submission.kind === "series-edit") {
-      await updateClassSeries(submission.seriesId, submission.input)
+      const result = await updateClassSeries(submission.seriesId, submission.input)
+      if (!result.ok) throw new Error(result.error)
     }
     setNotifyOpen(true)
     router.refresh()
@@ -66,9 +68,11 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
 
   async function handleDelete(eventId: string, options?: { deleteSeries?: boolean }) {
     if (options?.deleteSeries && editingEvent?.resource.seriesId) {
-      await deleteClassSeries(editingEvent.resource.seriesId)
+      const result = await deleteClassSeries(editingEvent.resource.seriesId)
+      if (!result.ok) throw new Error(result.error)
     } else {
-      await deleteClassInstance(eventId)
+      const result = await deleteClassInstance(eventId)
+      if (!result.ok) throw new Error(result.error)
     }
     setEditingEvent(null)
     setNotifyOpen(true)

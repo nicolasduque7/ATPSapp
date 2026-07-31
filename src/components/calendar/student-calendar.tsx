@@ -137,14 +137,16 @@ export function StudentCalendar({
   async function handleSave(submission: StudentClassFormSubmission) {
     switch (submission.kind) {
       case "one-off": {
-        const created = await createStudentClass(submission.input)
-        const mapped = mapClassInstanceToEvent(created, [studentProfile], locations, coaches)
+        const result = await createStudentClass(submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = mapClassInstanceToEvent(result.data, [studentProfile], locations, coaches)
         if (mapped) setClassEvents((prev) => [...prev, { kind: "class" as const, ...mapped }])
         return
       }
       case "series-create": {
-        const created = await createStudentClassSeries(submission.input)
-        const mapped = created.flatMap((instance) => {
+        const result = await createStudentClassSeries(submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = result.data.flatMap((instance) => {
           const event = mapClassInstanceToEvent(instance, [studentProfile], locations, coaches)
           return event ? [{ kind: "class" as const, ...event }] : []
         })
@@ -153,8 +155,9 @@ export function StudentCalendar({
       }
       case "instance-edit": {
         if (!selectedEvent) return
-        const updated = await updateStudentClassInstance(selectedEvent.id, submission.input)
-        const mapped = mapClassInstanceToEvent(updated, [studentProfile], locations, coaches)
+        const result = await updateStudentClassInstance(selectedEvent.id, submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = mapClassInstanceToEvent(result.data, [studentProfile], locations, coaches)
         if (mapped) {
           setClassEvents((prev) => prev.map((e) => (e.id === mapped.id ? { kind: "class" as const, ...mapped } : e)))
         }
@@ -162,8 +165,9 @@ export function StudentCalendar({
         return
       }
       case "series-edit": {
-        const updated = await updateStudentClassSeries(submission.seriesId, submission.input)
-        const mapped = updated.flatMap((instance) => {
+        const result = await updateStudentClassSeries(submission.seriesId, submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const mapped = result.data.flatMap((instance) => {
           const event = mapClassInstanceToEvent(instance, [studentProfile], locations, coaches)
           return event ? [{ kind: "class" as const, ...event }] : []
         })
@@ -181,10 +185,12 @@ export function StudentCalendar({
     const target = classEvents.find((e) => e.id === eventId)
     if (options?.deleteSeries && target?.resource.seriesId) {
       const seriesId = target.resource.seriesId
-      await deleteStudentClassSeries(seriesId)
+      const result = await deleteStudentClassSeries(seriesId)
+      if (!result.ok) throw new Error(result.error)
       setClassEvents((prev) => prev.filter((e) => e.resource.seriesId !== seriesId))
     } else {
-      await deleteStudentClassInstance(eventId)
+      const result = await deleteStudentClassInstance(eventId)
+      if (!result.ok) throw new Error(result.error)
       setClassEvents((prev) => prev.filter((e) => e.id !== eventId))
     }
     setSelectedEvent(null)

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
 
 import { requireCoachId } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -23,6 +24,7 @@ import {
   buildInstanceRows,
   isExclusionViolation,
 } from "@/lib/actions/class-shared";
+import type { ActionResult } from "@/lib/actions/result";
 
 export interface ClassInstanceInput {
   studentId: string;
@@ -66,117 +68,127 @@ export interface ClassSeriesUpdateInput {
   endDate: string; // "YYYY-MM-DD", club-local
 }
 
-export async function createClass(input: ClassInstanceInput): Promise<ClassInstance> {
-  const coachId = await requireCoachId();
-  const supabase = await createClient();
+export async function createClass(input: ClassInstanceInput): Promise<ActionResult<ClassInstance>> {
+  try {
+    const coachId = await requireCoachId();
+    const supabase = await createClient();
 
-  await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime);
-  await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime);
+    await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime);
+    await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime);
 
-  const { data, error } = await supabase
-    .from("classes")
-    .insert({
-      coach_id: coachId,
-      student_id: input.studentId,
-      location_id: input.locationId,
-      class_type: input.type,
-      start_time: formatDbTimestamp(input.startTime),
-      end_time: formatDbTimestamp(input.endTime),
-      duration_minutes: input.durationMinutes,
-      is_open: input.isOpen,
-      max_joiners: input.isOpen ? input.maxJoiners : null,
-    })
-    .select(CLASS_COLUMNS)
-    .single();
+    const { data, error } = await supabase
+      .from("classes")
+      .insert({
+        coach_id: coachId,
+        student_id: input.studentId,
+        location_id: input.locationId,
+        class_type: input.type,
+        start_time: formatDbTimestamp(input.startTime),
+        end_time: formatDbTimestamp(input.endTime),
+        duration_minutes: input.durationMinutes,
+        is_open: input.isOpen,
+        max_joiners: input.isOpen ? input.maxJoiners : null,
+      })
+      .select(CLASS_COLUMNS)
+      .single();
 
-  if (error) {
-    console.error("createClass failed:", error);
-    throw new Error(
-      isExclusionViolation(error)
-        ? "That time was just taken — please try again."
-        : "Couldn't create the class. Try again.",
-    );
+    if (error) {
+      console.error("createClass failed:", error);
+      throw new Error(
+        isExclusionViolation(error)
+          ? "That time was just taken — please try again."
+          : "Couldn't create the class. Try again.",
+      );
+    }
+
+    revalidatePath("/");
+    revalidatePath("/students");
+    revalidatePath("/calendar");
+    return { ok: true, data: mapClassRow(data) };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't create the class. Try again." };
   }
-
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
-  return mapClassRow(data);
 }
 
-export async function createClassSeries(input: ClassSeriesInput): Promise<ClassInstance[]> {
-  const coachId = await requireCoachId();
-  const supabase = await createClient();
+export async function createClassSeries(input: ClassSeriesInput): Promise<ActionResult<ClassInstance[]>> {
+  try {
+    const coachId = await requireCoachId();
+    const supabase = await createClient();
 
-  if (input.endDate < input.startDate) {
-    throw new Error("Until date must be on or after the start date.");
-  }
-  if (input.frequency === "Weekly" && !input.weekdays?.length) {
-    throw new Error("Select at least one day of the week.");
-  }
-  if (input.frequency === "Monthly" && !input.dayOfMonth) {
-    throw new Error("Select a day of the month.");
-  }
+    if (input.endDate < input.startDate) {
+      throw new Error("Until date must be on or after the start date.");
+    }
+    if (input.frequency === "Weekly" && !input.weekdays?.length) {
+      throw new Error("Select at least one day of the week.");
+    }
+    if (input.frequency === "Monthly" && !input.dayOfMonth) {
+      throw new Error("Select a day of the month.");
+    }
 
-  const pattern: RecurrencePattern = {
-    frequency: input.frequency,
-    intervalCount: input.intervalCount,
-    weekdays: input.frequency === "Weekly" ? input.weekdays : null,
-    dayOfMonth: input.frequency === "Monthly" ? input.dayOfMonth : null,
-  };
-  const occurrences = generateOccurrences(pattern, parseDateOnly(input.startDate), parseDateOnly(input.endDate));
-  if (occurrences.length === 0) {
-    throw new Error("Until date must be on or after the start date.");
-  }
-
-  for (const day of occurrences) {
-    const startTime = combineClubDateAndTime(day, input.startTime);
-    const endTime = addMinutes(startTime, input.durationMinutes);
-    await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
-    await assertNoCoachConflict(supabase, coachId, startTime, endTime);
-  }
-
-  const { data: series, error: seriesError } = await supabase
-    .from("class_series")
-    .insert({
-      coach_id: coachId,
-      student_id: input.studentId,
-      location_id: input.locationId,
-      class_type: input.type,
+    const pattern: RecurrencePattern = {
       frequency: input.frequency,
-      interval_count: input.intervalCount,
-      weekdays: pattern.weekdays,
-      day_of_month: pattern.dayOfMonth,
-      start_time: `${input.startTime}:00`,
-      duration_minutes: input.durationMinutes,
-      start_date: input.startDate,
-      end_date: input.endDate,
-    })
-    .select("id")
-    .single();
+      intervalCount: input.intervalCount,
+      weekdays: input.frequency === "Weekly" ? input.weekdays : null,
+      dayOfMonth: input.frequency === "Monthly" ? input.dayOfMonth : null,
+    };
+    const occurrences = generateOccurrences(pattern, parseDateOnly(input.startDate), parseDateOnly(input.endDate));
+    if (occurrences.length === 0) {
+      throw new Error("Until date must be on or after the start date.");
+    }
 
-  if (seriesError) {
-    console.error("createClassSeries failed:", seriesError);
-    throw new Error("Couldn't create the recurring series. Try again.");
+    for (const day of occurrences) {
+      const startTime = combineClubDateAndTime(day, input.startTime);
+      const endTime = addMinutes(startTime, input.durationMinutes);
+      await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
+      await assertNoCoachConflict(supabase, coachId, startTime, endTime);
+    }
+
+    const { data: series, error: seriesError } = await supabase
+      .from("class_series")
+      .insert({
+        coach_id: coachId,
+        student_id: input.studentId,
+        location_id: input.locationId,
+        class_type: input.type,
+        frequency: input.frequency,
+        interval_count: input.intervalCount,
+        weekdays: pattern.weekdays,
+        day_of_month: pattern.dayOfMonth,
+        start_time: `${input.startTime}:00`,
+        duration_minutes: input.durationMinutes,
+        start_date: input.startDate,
+        end_date: input.endDate,
+      })
+      .select("id")
+      .single();
+
+    if (seriesError) {
+      console.error("createClassSeries failed:", seriesError);
+      throw new Error("Couldn't create the recurring series. Try again.");
+    }
+
+    const rows = buildInstanceRows(occurrences, series.id, coachId, input.studentId, input);
+    const { data, error } = await supabase.from("classes").insert(rows).select(CLASS_COLUMNS);
+
+    if (error) {
+      console.error("createClassSeries instances failed:", error);
+      await supabase.from("class_series").delete().eq("id", series.id);
+      throw new Error(
+        isExclusionViolation(error)
+          ? "One of these classes' times was just taken — please try again."
+          : "Couldn't create the recurring series. Try again.",
+      );
+    }
+
+    revalidatePath("/");
+    revalidatePath("/students");
+    revalidatePath("/calendar");
+    return { ok: true, data: (data ?? []).map((row) => mapClassRow(row)) };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't create the recurring series. Try again." };
   }
-
-  const rows = buildInstanceRows(occurrences, series.id, coachId, input.studentId, input);
-  const { data, error } = await supabase.from("classes").insert(rows).select(CLASS_COLUMNS);
-
-  if (error) {
-    console.error("createClassSeries instances failed:", error);
-    await supabase.from("class_series").delete().eq("id", series.id);
-    throw new Error(
-      isExclusionViolation(error)
-        ? "One of these classes' times was just taken — please try again."
-        : "Couldn't create the recurring series. Try again.",
-    );
-  }
-
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
-  return (data ?? []).map((row) => mapClassRow(row));
 }
 
 // Updates the series definition and regenerates its future (not-yet-started)
@@ -185,98 +197,103 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<ClassI
 export async function updateClassSeries(
   seriesId: string,
   input: ClassSeriesUpdateInput,
-): Promise<ClassInstance[]> {
-  const coachId = await requireCoachId();
-  const supabase = await createClient();
-  const now = new Date();
+): Promise<ActionResult<ClassInstance[]>> {
+  try {
+    const coachId = await requireCoachId();
+    const supabase = await createClient();
+    const now = new Date();
 
-  const { data: updatedSeries, error: seriesError } = await supabase
-    .from("class_series")
-    .update({
-      student_id: input.studentId,
-      location_id: input.locationId,
-      class_type: input.type,
-      interval_count: input.intervalCount,
-      weekdays: input.weekdays ?? null,
-      day_of_month: input.dayOfMonth ?? null,
-      start_time: `${input.startTime}:00`,
-      duration_minutes: input.durationMinutes,
-      end_date: input.endDate,
-    })
-    .eq("id", seriesId)
-    .eq("coach_id", coachId)
-    .select("frequency")
-    .single();
+    const { data: updatedSeries, error: seriesError } = await supabase
+      .from("class_series")
+      .update({
+        student_id: input.studentId,
+        location_id: input.locationId,
+        class_type: input.type,
+        interval_count: input.intervalCount,
+        weekdays: input.weekdays ?? null,
+        day_of_month: input.dayOfMonth ?? null,
+        start_time: `${input.startTime}:00`,
+        duration_minutes: input.durationMinutes,
+        end_date: input.endDate,
+      })
+      .eq("id", seriesId)
+      .eq("coach_id", coachId)
+      .select("frequency")
+      .single();
 
-  if (seriesError) {
-    console.error("updateClassSeries failed:", seriesError);
-    throw new Error("Couldn't save the series. Try again.");
-  }
-
-  const { error: deleteError } = await supabase
-    .from("classes")
-    .delete()
-    .eq("series_id", seriesId)
-    .eq("coach_id", coachId)
-    .gt("start_time", formatDbTimestamp(now));
-
-  if (deleteError) {
-    console.error("updateClassSeries (clearing future instances) failed:", deleteError);
-    throw new Error("Couldn't save the series. Try again.");
-  }
-
-  const pattern: RecurrencePattern = {
-    frequency: updatedSeries.frequency,
-    intervalCount: input.intervalCount,
-    weekdays: input.weekdays,
-    dayOfMonth: input.dayOfMonth,
-  };
-  // `toClubZoned(now)` here (not `now` itself) so the day-stepping below
-  // reads "today" in club-local terms regardless of this server process's
-  // own ambient timezone — safe because it's built and consumed entirely
-  // within this one server invocation, never returned/serialized.
-  const occurrences = generateOccurrences(pattern, toClubZoned(now), parseDateOnly(input.endDate)).filter(
-    (day) => combineClubDateAndTime(day, input.startTime) > now,
-  );
-
-  if (occurrences.length > 0) {
-    // The old future instances of this series were already deleted above,
-    // so this only ever flags a genuine conflict with a DIFFERENT booking.
-    for (const day of occurrences) {
-      const startTime = combineClubDateAndTime(day, input.startTime);
-      const endTime = addMinutes(startTime, input.durationMinutes);
-      await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
-      await assertNoCoachConflict(supabase, coachId, startTime, endTime);
+    if (seriesError) {
+      console.error("updateClassSeries failed:", seriesError);
+      throw new Error("Couldn't save the series. Try again.");
     }
 
-    const rows = buildInstanceRows(occurrences, seriesId, coachId, input.studentId, input);
-    const { error: insertError } = await supabase.from("classes").insert(rows);
-    if (insertError) {
-      console.error("updateClassSeries (inserting future instances) failed:", insertError);
-      throw new Error(
-        isExclusionViolation(insertError)
-          ? "One of these classes' times was just taken — please try again."
-          : "Couldn't save the series. Try again.",
-      );
+    const { error: deleteError } = await supabase
+      .from("classes")
+      .delete()
+      .eq("series_id", seriesId)
+      .eq("coach_id", coachId)
+      .gt("start_time", formatDbTimestamp(now));
+
+    if (deleteError) {
+      console.error("updateClassSeries (clearing future instances) failed:", deleteError);
+      throw new Error("Couldn't save the series. Try again.");
     }
+
+    const pattern: RecurrencePattern = {
+      frequency: updatedSeries.frequency,
+      intervalCount: input.intervalCount,
+      weekdays: input.weekdays,
+      dayOfMonth: input.dayOfMonth,
+    };
+    // `toClubZoned(now)` here (not `now` itself) so the day-stepping below
+    // reads "today" in club-local terms regardless of this server process's
+    // own ambient timezone — safe because it's built and consumed entirely
+    // within this one server invocation, never returned/serialized.
+    const occurrences = generateOccurrences(pattern, toClubZoned(now), parseDateOnly(input.endDate)).filter(
+      (day) => combineClubDateAndTime(day, input.startTime) > now,
+    );
+
+    if (occurrences.length > 0) {
+      // The old future instances of this series were already deleted above,
+      // so this only ever flags a genuine conflict with a DIFFERENT booking.
+      for (const day of occurrences) {
+        const startTime = combineClubDateAndTime(day, input.startTime);
+        const endTime = addMinutes(startTime, input.durationMinutes);
+        await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
+        await assertNoCoachConflict(supabase, coachId, startTime, endTime);
+      }
+
+      const rows = buildInstanceRows(occurrences, seriesId, coachId, input.studentId, input);
+      const { error: insertError } = await supabase.from("classes").insert(rows);
+      if (insertError) {
+        console.error("updateClassSeries (inserting future instances) failed:", insertError);
+        throw new Error(
+          isExclusionViolation(insertError)
+            ? "One of these classes' times was just taken — please try again."
+            : "Couldn't save the series. Try again.",
+        );
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("classes")
+      .select(CLASS_COLUMNS)
+      .eq("series_id", seriesId)
+      .eq("coach_id", coachId)
+      .order("start_time");
+
+    if (error) {
+      console.error("updateClassSeries (refetch) failed:", error);
+      throw new Error("Couldn't refresh the series. Try again.");
+    }
+
+    revalidatePath("/");
+    revalidatePath("/students");
+    revalidatePath("/calendar");
+    return { ok: true, data: (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now)) };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't save the series. Try again." };
   }
-
-  const { data, error } = await supabase
-    .from("classes")
-    .select(CLASS_COLUMNS)
-    .eq("series_id", seriesId)
-    .eq("coach_id", coachId)
-    .order("start_time");
-
-  if (error) {
-    console.error("updateClassSeries (refetch) failed:", error);
-    throw new Error("Couldn't refresh the series. Try again.");
-  }
-
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
-  return (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now));
 }
 
 export interface ClassSeriesMeta {
@@ -322,79 +339,96 @@ export async function getClassSeriesMeta(seriesId: string): Promise<ClassSeriesM
 export async function updateClassInstance(
   id: string,
   input: ClassInstanceInput,
-): Promise<ClassInstance> {
-  const coachId = await requireCoachId();
-  const supabase = await createClient();
+): Promise<ActionResult<ClassInstance>> {
+  try {
+    const coachId = await requireCoachId();
+    const supabase = await createClient();
 
-  await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime, id);
-  await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime, id);
+    await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime, id);
+    await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime, id);
 
-  const { data, error } = await supabase
-    .from("classes")
-    .update({
-      student_id: input.studentId,
-      location_id: input.locationId,
-      class_type: input.type,
-      start_time: formatDbTimestamp(input.startTime),
-      end_time: formatDbTimestamp(input.endTime),
-      duration_minutes: input.durationMinutes,
-      is_open: input.isOpen,
-      max_joiners: input.isOpen ? input.maxJoiners : null,
-    })
-    .eq("id", id)
-    .eq("coach_id", coachId)
-    .select(CLASS_COLUMNS)
-    .single();
+    const { data, error } = await supabase
+      .from("classes")
+      .update({
+        student_id: input.studentId,
+        location_id: input.locationId,
+        class_type: input.type,
+        start_time: formatDbTimestamp(input.startTime),
+        end_time: formatDbTimestamp(input.endTime),
+        duration_minutes: input.durationMinutes,
+        is_open: input.isOpen,
+        max_joiners: input.isOpen ? input.maxJoiners : null,
+      })
+      .eq("id", id)
+      .eq("coach_id", coachId)
+      .select(CLASS_COLUMNS)
+      .single();
 
-  if (error) {
-    console.error("updateClassInstance failed:", error);
-    throw new Error(
-      isExclusionViolation(error)
-        ? "That time was just taken — please try again."
-        : "Couldn't save class. Try again.",
-    );
+    if (error) {
+      console.error("updateClassInstance failed:", error);
+      throw new Error(
+        isExclusionViolation(error)
+          ? "That time was just taken — please try again."
+          : "Couldn't save class. Try again.",
+      );
+    }
+
+    revalidatePath("/");
+    revalidatePath("/students");
+    revalidatePath("/calendar");
+    return { ok: true, data: mapClassRow(data) };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't save class. Try again." };
   }
-
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
-  return mapClassRow(data);
 }
 
-export async function deleteClassInstance(id: string): Promise<void> {
-  const coachId = await requireCoachId();
-  const supabase = await createClient();
+export async function deleteClassInstance(id: string): Promise<ActionResult> {
+  try {
+    const coachId = await requireCoachId();
+    const supabase = await createClient();
 
-  const { error } = await supabase.from("classes").delete().eq("id", id).eq("coach_id", coachId);
+    const { error } = await supabase.from("classes").delete().eq("id", id).eq("coach_id", coachId);
 
-  if (error) {
-    console.error("deleteClassInstance failed:", error);
-    throw new Error("Couldn't delete class. Try again.");
+    if (error) {
+      console.error("deleteClassInstance failed:", error);
+      throw new Error("Couldn't delete class. Try again.");
+    }
+
+    revalidatePath("/");
+    revalidatePath("/students");
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't delete class. Try again." };
   }
-
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
 }
 
 // Deletes the recurring series and every instance it generated (past and
 // future) via the class_series -> classes cascade delete.
-export async function deleteClassSeries(seriesId: string): Promise<void> {
-  const coachId = await requireCoachId();
-  const supabase = await createClient();
+export async function deleteClassSeries(seriesId: string): Promise<ActionResult> {
+  try {
+    const coachId = await requireCoachId();
+    const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("class_series")
-    .delete()
-    .eq("id", seriesId)
-    .eq("coach_id", coachId);
+    const { error } = await supabase
+      .from("class_series")
+      .delete()
+      .eq("id", seriesId)
+      .eq("coach_id", coachId);
 
-  if (error) {
-    console.error("deleteClassSeries failed:", error);
-    throw new Error("Couldn't delete the series. Try again.");
+    if (error) {
+      console.error("deleteClassSeries failed:", error);
+      throw new Error("Couldn't delete the series. Try again.");
+    }
+
+    revalidatePath("/");
+    revalidatePath("/students");
+    revalidatePath("/calendar");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't delete the series. Try again." };
   }
-
-  revalidatePath("/");
-  revalidatePath("/students");
-  revalidatePath("/calendar");
 }

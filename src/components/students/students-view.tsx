@@ -54,16 +54,20 @@ export function StudentsView({
 
   async function handleSaveStudent(input: StudentInput) {
     if (mode === "create") {
-      const created = await createStudent(input)
-      setStudents((prev) => [...prev, created])
+      const result = await createStudent(input)
+      if (!result.ok) throw new Error(result.error)
+      setStudents((prev) => [...prev, result.data])
     } else if (editingStudent) {
-      const saved = await updateStudent(editingStudent.id, input)
+      const result = await updateStudent(editingStudent.id, input)
+      if (!result.ok) throw new Error(result.error)
+      const saved = result.data
       setStudents((prev) => prev.map((student) => (student.id === saved.id ? saved : student)))
     }
   }
 
   async function handleDeleteStudent(studentId: string) {
-    await deleteStudent(studentId)
+    const result = await deleteStudent(studentId)
+    if (!result.ok) throw new Error(result.error)
     setStudents((prev) => prev.filter((student) => student.id !== studentId))
     setClasses((prev) => prev.filter((c) => c.studentId !== studentId))
     setEditingStudent(null)

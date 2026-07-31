@@ -106,12 +106,15 @@ export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOf
   async function handleSave(submission: AvailabilityFormSubmission) {
     switch (submission.kind) {
       case "one-off-create": {
-        const created = await createAvailabilityBlock(submission.input)
-        setOneOffBlocks((prev) => [...prev, created])
+        const result = await createAvailabilityBlock(submission.input)
+        if (!result.ok) throw new Error(result.error)
+        setOneOffBlocks((prev) => [...prev, result.data])
         return
       }
       case "series-create": {
-        const { seriesId, blocks } = await createAvailabilitySeries(submission.input)
+        const result = await createAvailabilitySeries(submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const { seriesId, blocks } = result.data
         setSeries((prev) => [
           ...prev,
           {
@@ -132,12 +135,15 @@ export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOf
       }
       case "one-off-edit": {
         if (dialogTarget?.kind !== "block") return
-        const updated = await updateAvailabilityBlock(dialogTarget.block.id, submission.input)
+        const result = await updateAvailabilityBlock(dialogTarget.block.id, submission.input)
+        if (!result.ok) throw new Error(result.error)
+        const updated = result.data
         setOneOffBlocks((prev) => prev.map((b) => (b.id === updated.id ? updated : b)))
         return
       }
       case "series-edit": {
-        await updateAvailabilitySeries(submission.seriesId, submission.input)
+        const result = await updateAvailabilitySeries(submission.seriesId, submission.input)
+        if (!result.ok) throw new Error(result.error)
         setSeries((prev) =>
           prev.map((s) => (s.id === submission.seriesId ? { ...s, ...blockToSummaryDelta(submission.input) } : s))
         )
@@ -148,10 +154,12 @@ export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOf
 
   async function handleDelete(target: { kind: "block" | "series"; id: string }) {
     if (target.kind === "block") {
-      await deleteAvailabilityBlock(target.id)
+      const result = await deleteAvailabilityBlock(target.id)
+      if (!result.ok) throw new Error(result.error)
       setOneOffBlocks((prev) => prev.filter((b) => b.id !== target.id))
     } else {
-      await deleteAvailabilitySeries(target.id)
+      const result = await deleteAvailabilitySeries(target.id)
+      if (!result.ok) throw new Error(result.error)
       setSeries((prev) => prev.filter((s) => s.id !== target.id))
     }
     setDialogTarget(null)

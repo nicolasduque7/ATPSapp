@@ -245,13 +245,15 @@ function StudentProfileForm({
     switch (submission.kind) {
       case "instance-edit": {
         if (!selectedClass) return
-        const saved = await updateClassInstance(selectedClass.id, submission.input)
-        onSaveClassInstance(saved)
+        const result = await updateClassInstance(selectedClass.id, submission.input)
+        if (!result.ok) throw new Error(result.error)
+        onSaveClassInstance(result.data)
         break
       }
       case "series-edit": {
-        const updated = await updateClassSeries(submission.seriesId, submission.input)
-        onSaveClassSeries(submission.seriesId, updated)
+        const result = await updateClassSeries(submission.seriesId, submission.input)
+        if (!result.ok) throw new Error(result.error)
+        onSaveClassSeries(submission.seriesId, result.data)
         break
       }
       default:
@@ -264,10 +266,12 @@ function StudentProfileForm({
   async function handleDeleteClass(classId: string, options?: { deleteSeries?: boolean }) {
     if (options?.deleteSeries && selectedClass?.seriesId) {
       const seriesId = selectedClass.seriesId
-      await deleteClassSeries(seriesId)
+      const result = await deleteClassSeries(seriesId)
+      if (!result.ok) throw new Error(result.error)
       onDeleteClass({ seriesId })
     } else {
-      await deleteClassInstance(classId)
+      const result = await deleteClassInstance(classId)
+      if (!result.ok) throw new Error(result.error)
       onDeleteClass({ classId })
     }
     setSelectedClass(null)

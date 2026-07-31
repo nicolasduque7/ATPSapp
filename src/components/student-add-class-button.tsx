@@ -22,9 +22,11 @@ export function StudentAddClassButton({ coaches, locations }: StudentAddClassBut
 
   async function handleSave(submission: StudentClassFormSubmission) {
     if (submission.kind === "one-off") {
-      await createStudentClass(submission.input)
+      const result = await createStudentClass(submission.input)
+      if (!result.ok) throw new Error(result.error)
     } else if (submission.kind === "series-create") {
-      await createStudentClassSeries(submission.input)
+      const result = await createStudentClassSeries(submission.input)
+      if (!result.ok) throw new Error(result.error)
     }
     router.refresh()
   }

@@ -54,15 +54,14 @@ function OpenClassView({
   async function handleRequest() {
     setError(null)
     setRequesting(true)
-    try {
-      await requestToJoinClass(event.id)
-      setRequested(true)
-      onRequested?.()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't send the join request. Try again.")
-    } finally {
-      setRequesting(false)
+    const result = await requestToJoinClass(event.id)
+    setRequesting(false)
+    if (!result.ok) {
+      setError(result.error)
+      return
     }
+    setRequested(true)
+    onRequested?.()
   }
 
   return (

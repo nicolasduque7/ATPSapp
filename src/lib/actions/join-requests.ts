@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
 
 import { requireCoachId, requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -8,49 +9,79 @@ import { parseDbTimestamp } from "@/lib/dates";
 import type { ClassType, StudentLevel } from "@/lib/mock-data";
 import type { JoinRequestDetail, JoinRequestStatus, PartnerStudent } from "@/lib/queries/notifications";
 import { getClassPartnerStudents } from "@/lib/queries/notifications";
+import type { ActionResult } from "@/lib/actions/result";
+
+// A near-simultaneous second request/decision can pass the RPC's own
+// friendly pre-check and only then collide with the DB-level backstop —
+// class_join_requests_one_pending_idx (23505) or
+// class_participants_no_student_overlap (23P01). Translate those race codes
+// instead of surfacing the raw Postgres text.
+function isJoinRequestRace(error: { code?: string }): boolean {
+  return error.code === "23505" || error.code === "23P01";
+}
 
 // Wraps request_to_join_class (see the class_join_requests migration), which
 // resolves the caller's student_id server-side and validates the class is
 // open, not the caller's own, not already joined/pending, and has room —
 // this action just surfaces the RPC's error message and revalidates the
 // pages that show classes.
-export async function requestToJoinClass(classId: string): Promise<void> {
-  await requireStudent();
-  const supabase = await createClient();
+export async function requestToJoinClass(classId: string): Promise<ActionResult> {
+  try {
+    await requireStudent();
+    const supabase = await createClient();
 
-  const { error } = await supabase.rpc("request_to_join_class", { p_class_id: classId });
+    const { error } = await supabase.rpc("request_to_join_class", { p_class_id: classId });
 
-  if (error) {
-    console.error("requestToJoinClass failed:", error);
-    throw new Error(error.message || "Couldn't send the join request. Try again.");
+    if (error) {
+      console.error("requestToJoinClass failed:", error);
+      throw new Error(
+        isJoinRequestRace(error)
+          ? "You just requested this — try again in a moment."
+          : error.message || "Couldn't send the join request. Try again.",
+      );
+    }
+
+    revalidatePath("/student/calendar");
+    revalidatePath("/student");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't send the join request. Try again." };
   }
-
-  revalidatePath("/student/calendar");
-  revalidatePath("/student");
 }
 
 // Wraps decide_join_request, which re-validates capacity/conflicts, inserts
 // the approved joiner, flips the class to 'Group', and writes the
 // notification rows for both students — all atomically, inside the RPC. The
 // RPC itself can't trigger Next.js revalidation, so that happens here.
-export async function decideJoinRequest(requestId: string, approve: boolean): Promise<void> {
-  await requireCoachId();
-  const supabase = await createClient();
+export async function decideJoinRequest(requestId: string, approve: boolean): Promise<ActionResult> {
+  try {
+    await requireCoachId();
+    const supabase = await createClient();
 
-  const { error } = await supabase.rpc("decide_join_request", {
-    p_request_id: requestId,
-    p_approve: approve,
-  });
+    const { error } = await supabase.rpc("decide_join_request", {
+      p_request_id: requestId,
+      p_approve: approve,
+    });
 
-  if (error) {
-    console.error("decideJoinRequest failed:", error);
-    throw new Error(error.message || "Couldn't record your decision. Try again.");
+    if (error) {
+      console.error("decideJoinRequest failed:", error);
+      throw new Error(
+        isJoinRequestRace(error)
+          ? "Someone just filled that spot — try again."
+          : error.message || "Couldn't record your decision. Try again.",
+      );
+    }
+
+    revalidatePath("/notifications");
+    revalidatePath("/calendar");
+    revalidatePath("/student/calendar");
+    revalidatePath("/student/notifications");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't record your decision. Try again." };
   }
-
-  revalidatePath("/notifications");
-  revalidatePath("/calendar");
-  revalidatePath("/student/calendar");
-  revalidatePath("/student/notifications");
 }
 
 // Lazily loaded by the decision dialog when a coach clicks a pending
