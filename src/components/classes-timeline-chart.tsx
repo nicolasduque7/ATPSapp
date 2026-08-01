@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { Area, AreaChart, CartesianGrid, LabelList, XAxis, YAxis, type DotItemDotProps, type LabelProps } from "recharts"
+import { useLocale, useTranslations } from "next-intl"
 
 import {
   ChartContainer,
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/chart"
 import { Slider } from "@/components/ui/slider"
 import { formatClubDate } from "@/lib/dates"
+import { getDateFnsLocale } from "@/lib/date-locale"
 import type { DailyClassCount } from "@/lib/mock-data"
 
 interface ClassesTimelineChartProps {
@@ -28,15 +30,19 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-function formatAxisTick(date: Date): string {
-  return formatClubDate(date, "MMM d")
-}
-
-function formatTooltipLabel(date: Date): string {
-  return formatClubDate(date, "EEEE, MMM d")
-}
-
 export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
+  const t = useTranslations("dashboard")
+  const appLocale = useLocale()
+  const dateFnsLocale = getDateFnsLocale(appLocale)
+
+  function formatAxisTick(date: Date): string {
+    return formatClubDate(date, "MMM d", dateFnsLocale)
+  }
+
+  function formatTooltipLabel(date: Date): string {
+    return formatClubDate(date, "EEEE, MMM d", dateFnsLocale)
+  }
+
   const [halfWidth, setHalfWidth] = useState(DEFAULT_HALF_WIDTH)
 
   const visibleData = useMemo(
@@ -50,8 +56,8 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
     if (visibleData.length === 0) return ""
     const first = visibleData[0].date
     const last = visibleData[visibleData.length - 1].date
-    return `${formatAxisTick(first)} – ${formatAxisTick(last)}`
-  }, [visibleData])
+    return `${formatClubDate(first, "MMM d", dateFnsLocale)} – ${formatClubDate(last, "MMM d", dateFnsLocale)}`
+  }, [visibleData, dateFnsLocale])
 
   function renderDot({ cx, cy, payload }: DotItemDotProps) {
     if (cx === undefined || cy === undefined || payload == null) return <g key={`${cx}-${cy}`} />
@@ -98,11 +104,11 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-300 motion-reduce:animate-none rounded-3xl bg-card p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-heading text-lg font-bold text-foreground">Classes Timeline</h2>
+        <h2 className="font-heading text-lg font-bold text-foreground">{t("classesTimelineTitle")}</h2>
         <span className="text-sm text-muted-foreground">{rangeLabel}</span>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Classes scheduled per day, {halfWidth} days back and forward from today.
+        {t("classesTimelineSubtitle", { days: halfWidth })}
       </p>
 
       <ChartContainer config={chartConfig} className="mt-6 aspect-auto h-56 w-full">
@@ -156,7 +162,7 @@ export function ClassesTimelineChart({ data }: ClassesTimelineChartProps) {
           max={MAX_HALF_WIDTH}
           step={1}
           className="flex-1"
-          aria-label="Days shown before and after today"
+          aria-label={t("daysSliderAria")}
         />
         <span className="text-xs text-muted-foreground">{MAX_HALF_WIDTH}d</span>
       </div>

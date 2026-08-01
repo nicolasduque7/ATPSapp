@@ -1,3 +1,7 @@
+"use client"
+
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 import type { StudentLevel } from "@/lib/mock-data";
 
@@ -7,6 +11,7 @@ interface LevelBadgeProps {
 }
 
 export function LevelBadge({ level, className }: LevelBadgeProps): React.JSX.Element {
+  const t = useTranslations("enums.studentLevel");
   return (
     <span
       className={cn(
@@ -14,7 +19,7 @@ export function LevelBadge({ level, className }: LevelBadgeProps): React.JSX.Ele
         className
       )}
     >
-      {level}
+      {t(level)}
     </span>
   );
 }

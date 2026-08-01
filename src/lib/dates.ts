@@ -1,4 +1,5 @@
 import { fromZonedTime, formatInTimeZone, toZonedTime } from "date-fns-tz"
+import type { Locale as DateFnsLocale } from "date-fns"
 
 // `classes`/`class_series` store plain (timezone-less) date/timestamp columns
 // — see the initial-schema migration's rationale. Postgres ignores any
@@ -70,12 +71,12 @@ export function formatDbTimestamp(date: Date): string {
   return formatInTimeZone(date, CLUB_TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss")
 }
 
-export function formatClubTime(date: Date): string {
-  return formatInTimeZone(date, CLUB_TIMEZONE, "h:mm a")
+export function formatClubTime(date: Date, locale?: DateFnsLocale): string {
+  return formatInTimeZone(date, CLUB_TIMEZONE, "h:mm a", locale ? { locale } : undefined)
 }
 
-export function formatClubDate(date: Date, formatStr: string): string {
-  return formatInTimeZone(date, CLUB_TIMEZONE, formatStr)
+export function formatClubDate(date: Date, formatStr: string, locale?: DateFnsLocale): string {
+  return formatInTimeZone(date, CLUB_TIMEZONE, formatStr, locale ? { locale } : undefined)
 }
 
 // Real instant of club-local midnight for the club-calendar-day containing

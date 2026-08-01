@@ -2,11 +2,13 @@
 
 import { useTheme } from "next-themes"
 import { Moon, Sun } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { useHasMounted } from "@/lib/hooks/use-has-mounted"
 
 export function ThemeToggle() {
+  const t = useTranslations("common")
   const { resolvedTheme, setTheme } = useTheme()
   const hasMounted = useHasMounted()
   const isDark = hasMounted && resolvedTheme === "dark"
@@ -16,7 +18,7 @@ export function ThemeToggle() {
       type="button"
       variant="ghost"
       size="icon"
-      aria-label="Toggle theme"
+      aria-label={t("toggleTheme")}
       className="relative text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >

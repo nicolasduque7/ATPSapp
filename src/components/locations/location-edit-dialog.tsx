@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react"
 import { Trash2 } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import {
   Dialog,
@@ -34,11 +35,12 @@ export function LocationEditDialog({
   onSave,
   onDelete,
 }: LocationEditDialogProps) {
+  const t = useTranslations("locations")
   return (
     <Dialog open={!!location} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? "Add location" : "Edit location"}</DialogTitle>
+          <DialogTitle>{mode === "create" ? t("addTitle") : t("editTitle")}</DialogTitle>
         </DialogHeader>
 
         {location && (
@@ -65,6 +67,8 @@ interface LocationEditFormProps {
 }
 
 function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: LocationEditFormProps) {
+  const t = useTranslations("locations")
+  const ts = useTranslations("enums.courtSurface")
   const formId = useId()
   const [name, setName] = useState(location.name)
   const [address, setAddress] = useState(location.address ?? "")
@@ -81,7 +85,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
     formEvent.preventDefault()
 
     if (!name.trim()) {
-      setError("Name is required.")
+      setError(t("errorNameRequired"))
       return
     }
 
@@ -97,7 +101,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
       })
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.")
+      setError(err instanceof Error ? err.message : t("errorGeneric"))
     } finally {
       setSaving(false)
     }
@@ -109,7 +113,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
     try {
       await onDelete(location.id)
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Couldn't delete location. Try again.")
+      setDeleteError(err instanceof Error ? err.message : t("errorDeleteGeneric"))
       setDeleting(false)
     }
   }
@@ -119,31 +123,31 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
       <form id={formId} onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-name`} className="text-xs font-medium text-muted-foreground">
-            Name
+            {t("name")}
           </label>
           <Input
             id={`${formId}-name`}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Riverside Courts"
+            placeholder={t("namePlaceholder")}
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-address`} className="text-xs font-medium text-muted-foreground">
-            Address
+            {t("address")}
           </label>
           <Input
             id={`${formId}-address`}
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            placeholder="e.g. 100 Riverside Dr"
+            placeholder={t("addressPlaceholder")}
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Surface</span>
-          <div role="radiogroup" aria-label="Surface" className="flex flex-wrap gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{t("surface")}</span>
+          <div role="radiogroup" aria-label={t("surface")} className="flex flex-wrap gap-2">
             {SURFACE_OPTIONS.map((option) => {
               const selected = option === surface
               const dots =
@@ -170,7 +174,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
                   )}
                 >
                   {dots}
-                  {option}
+                  {ts(option)}
                 </button>
               )
             })}
@@ -181,7 +185,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
           {surface !== "Clay" && (
             <div className="flex flex-col gap-1.5">
               <label htmlFor={`${formId}-hard`} className="text-xs font-medium text-muted-foreground">
-                Hard courts
+                {t("hardCourts")}
               </label>
               <Input
                 id={`${formId}-hard`}
@@ -195,7 +199,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
           {surface !== "Hard" && (
             <div className="flex flex-col gap-1.5">
               <label htmlFor={`${formId}-clay`} className="text-xs font-medium text-muted-foreground">
-                Clay courts
+                {t("clayCourts")}
               </label>
               <Input
                 id={`${formId}-clay`}
@@ -213,10 +217,10 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
 
       <DialogFooter>
         <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button type="submit" form={formId} variant="positive" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("saving") : t("save")}
         </Button>
       </DialogFooter>
 
@@ -225,7 +229,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
           {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           {confirmingDelete ? (
             <div className="flex items-center gap-2">
-              <p className="flex-1 text-sm text-foreground">Delete this location?</p>
+              <p className="flex-1 text-sm text-foreground">{t("deleteLocationQuestion")}</p>
               <Button
                 type="button"
                 variant="secondary"
@@ -236,7 +240,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
                 }}
                 disabled={deleting}
               >
-                Keep location
+                {t("keepLocation")}
               </Button>
               <Button
                 type="button"
@@ -245,7 +249,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
                 onClick={handleConfirmDelete}
                 disabled={deleting}
               >
-                {deleting ? "Deleting…" : "Confirm delete"}
+                {deleting ? t("deleting") : t("confirmDelete")}
               </Button>
             </div>
           ) : (
@@ -256,7 +260,7 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
               onClick={() => setConfirmingDelete(true)}
             >
               <Trash2 />
-              Delete location
+              {t("deleteLocation")}
             </Button>
           )}
         </div>

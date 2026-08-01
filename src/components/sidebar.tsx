@@ -1,4 +1,5 @@
 import { Bell, CalendarDays, Home, MapPin, Settings, Users } from "lucide-react"
+import { getTranslations } from "next-intl/server"
 
 import { NavItem } from "@/components/nav-item"
 import { MobileNavBar } from "@/components/mobile-nav-bar"
@@ -9,17 +10,22 @@ import { getUnreadNotificationCount } from "@/lib/queries/notifications"
 
 const iconClassName = "size-5 stroke-[1.75]"
 
-const navItems = [
-  { href: "/", icon: <Home className={iconClassName} />, label: "Home" },
-  { href: "/calendar", icon: <CalendarDays className={iconClassName} />, label: "Calendar" },
-  { href: "/locations", icon: <MapPin className={iconClassName} />, label: "Locations" },
-  { href: "/students", icon: <Users className={iconClassName} />, label: "Students" },
-  { href: "/notifications", icon: <Bell className={iconClassName} />, label: "Notifications" },
-  { href: "/settings", icon: <Settings className={iconClassName} />, label: "Settings" },
-]
-
 export async function Sidebar(): Promise<React.JSX.Element> {
-  const [coach, unreadCount] = await Promise.all([requireCoach(), getUnreadNotificationCount()])
+  const [coach, unreadCount, t] = await Promise.all([
+    requireCoach(),
+    getUnreadNotificationCount(),
+    getTranslations("nav"),
+  ])
+
+  const navItems = [
+    { href: "/", icon: <Home className={iconClassName} />, label: t("home") },
+    { href: "/calendar", icon: <CalendarDays className={iconClassName} />, label: t("calendar") },
+    { href: "/locations", icon: <MapPin className={iconClassName} />, label: t("locations") },
+    { href: "/students", icon: <Users className={iconClassName} />, label: t("students") },
+    { href: "/notifications", icon: <Bell className={iconClassName} />, label: t("notifications") },
+    { href: "/settings", icon: <Settings className={iconClassName} />, label: t("settings") },
+  ]
+
   const items = navItems.map((item) => ({
     ...item,
     badgeCount: item.href === "/notifications" ? unreadCount : undefined,

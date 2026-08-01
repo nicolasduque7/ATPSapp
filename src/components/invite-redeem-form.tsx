@@ -1,6 +1,7 @@
 "use client"
 
 import { useActionState } from "react"
+import { useTranslations } from "next-intl"
 
 import { redeemInvite, type RedeemState } from "@/app/invite/[token]/actions"
 import { Button } from "@/components/ui/button"
@@ -14,6 +15,7 @@ interface InviteRedeemFormProps {
 }
 
 export function InviteRedeemForm({ token, email }: InviteRedeemFormProps) {
+  const t = useTranslations("auth.invite")
   const [state, action, pending] = useActionState(redeemInvite, initialState)
 
   return (
@@ -21,13 +23,13 @@ export function InviteRedeemForm({ token, email }: InviteRedeemFormProps) {
       <input type="hidden" name="token" value={token} />
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Email</label>
+        <label className="text-xs font-medium text-muted-foreground">{t("emailLabel")}</label>
         <Input type="email" value={email} disabled readOnly />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="invite-password" className="text-xs font-medium text-muted-foreground">
-          Password
+          {t("passwordLabel")}
         </label>
         <Input
           id="invite-password"
@@ -42,7 +44,7 @@ export function InviteRedeemForm({ token, email }: InviteRedeemFormProps) {
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
 
       <Button type="submit" variant="positive" className="mt-2 w-full" disabled={pending}>
-        {pending ? "Creating account…" : "Create account"}
+        {pending ? t("submitPending") : t("submit")}
       </Button>
     </form>
   )

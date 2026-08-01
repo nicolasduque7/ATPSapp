@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { ClassEditDialog, createDraftEvent } from "@/components/calendar/class-edit-dialog"
@@ -16,6 +17,7 @@ interface AddClassButtonProps {
 }
 
 export function AddClassButton({ students, locations }: AddClassButtonProps) {
+  const t = useTranslations("home")
   const router = useRouter()
   const [creatingEvent, setCreatingEvent] = useState<CalendarClassEvent | null>(null)
 
@@ -39,7 +41,7 @@ export function AddClassButton({ students, locations }: AddClassButtonProps) {
         disabled={students.length === 0 || locations.length === 0}
       >
         <Plus />
-        Add new class
+        {t("addNewClass")}
       </Button>
 
       <ClassEditDialog

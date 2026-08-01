@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { Calendar, type EventProps, type View } from "react-big-calendar"
 import { Plus } from "lucide-react"
+import { useLocale, useTranslations } from "next-intl"
 
 import "react-big-calendar/lib/css/react-big-calendar.css"
 import "@/components/calendar/calendar-overrides.css"
@@ -62,6 +63,8 @@ export function ClassCalendar({
   coaches,
   currentCoachId,
 }: ClassCalendarProps) {
+  const t = useTranslations("calendar")
+  const locale = useLocale()
   const hasMounted = useHasMounted()
   const [view, setView] = useState<CalendarViewKey>("week")
   const [date, setDate] = useState(() => new Date())
@@ -286,16 +289,14 @@ export function ClassCalendar({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">Calendar</h1>
-          <p className="text-sm text-muted-foreground">
-            Month, week, 3-day, and day views of your schedule.
-          </p>
+          <h1 className="font-heading text-2xl font-bold text-foreground">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button
           type="button"
           variant="positive"
           size="icon"
-          aria-label="Add class"
+          aria-label={t("addClass")}
           onClick={handleAddClick}
           disabled={students.length === 0 || locations.length === 0}
         >
@@ -304,29 +305,27 @@ export function ClassCalendar({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-3">
-        <span className="text-xs font-medium text-muted-foreground">Show on calendar:</span>
+        <span className="text-xs font-medium text-muted-foreground">{t("showOnCalendar")}</span>
         <CoachFilterPopover
-          label="Classes booked"
+          label={t("otherCoachesClasses")}
           coaches={otherCoaches}
           allCoaches={coaches}
           selectedIds={visibleClassCoachIds}
           onToggle={toggleClassCoach}
-          emptyLabel="No other coaches yet."
+          emptyLabel={t("noOtherCoaches")}
         />
         <CoachFilterPopover
-          label="Working hours"
+          label={t("coachesWorkingHours")}
           coaches={coaches}
           allCoaches={coaches}
           selectedIds={visibleAvailabilityCoachIds}
           onToggle={toggleAvailabilityCoach}
-          emptyLabel="No coaches yet."
+          emptyLabel={t("noCoaches")}
         />
       </div>
 
       {displayedEvents.length === 0 ? (
-        <div className="rounded-3xl bg-card p-6 text-sm text-muted-foreground">
-          No classes scheduled yet.
-        </div>
+        <div className="rounded-3xl bg-card p-6 text-sm text-muted-foreground">{t("noClassesScheduled")}</div>
       ) : (
         <div
           className="courtside-calendar h-[1150px] rounded-3xl bg-card p-4 sm:p-6"
@@ -335,6 +334,7 @@ export function ClassCalendar({
           {hasMounted ? (
             <Calendar<CalendarEvent>
               localizer={localizer}
+              culture={locale === "es" ? "es" : "en-US"}
               events={displayedEvents}
               view={view as View}
               onView={(nextView) => setView(nextView as unknown as CalendarViewKey)}

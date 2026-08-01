@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl"
+
 import { cn } from "@/lib/utils"
 import { getSurfaceColorStyle } from "@/lib/surface-colors"
 import type { CourtSurface } from "@/lib/mock-data"
@@ -9,7 +11,9 @@ interface SurfacePillProps {
 }
 
 export function SurfacePill({ surface, totalCourts, className }: SurfacePillProps): React.JSX.Element {
-  const courtsLabel = `${totalCourts} ${totalCourts === 1 ? "court" : "courts"}`
+  const t = useTranslations("tags")
+  const ts = useTranslations("enums.courtSurface")
+  const courtsLabel = `${totalCourts} ${totalCourts === 1 ? t("court") : t("courts")}`
 
   if (surface === "Both") {
     const hard = getSurfaceColorStyle("Hard")
@@ -25,7 +29,7 @@ export function SurfacePill({ surface, totalCourts, className }: SurfacePillProp
           <span className={cn("size-2 rounded-full ring-2 ring-muted", hard.dot)} />
           <span className={cn("size-2 rounded-full ring-2 ring-muted", clay.dot)} />
         </span>
-        Both · {courtsLabel}
+        {ts("Both")} · {courtsLabel}
       </span>
     )
   }
@@ -41,7 +45,7 @@ export function SurfacePill({ surface, totalCourts, className }: SurfacePillProp
       )}
     >
       <span className={cn("size-2 shrink-0 rounded-full", style.dot)} />
-      {surface} · {courtsLabel}
+      {ts(surface)} · {courtsLabel}
     </span>
   )
 }

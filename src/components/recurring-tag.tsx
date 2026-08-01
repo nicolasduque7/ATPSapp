@@ -1,4 +1,7 @@
+"use client"
+
 import { Repeat } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -8,6 +11,7 @@ interface RecurringTagProps {
 }
 
 export function RecurringTag({ className, iconClassName }: RecurringTagProps): React.JSX.Element {
+  const t = useTranslations("tags");
   return (
     <span
       className={cn(
@@ -16,7 +20,7 @@ export function RecurringTag({ className, iconClassName }: RecurringTagProps): R
       )}
     >
       <Repeat className={cn("size-3 shrink-0", iconClassName)} />
-      Recurring
+      {t("recurring")}
     </span>
   );
 }

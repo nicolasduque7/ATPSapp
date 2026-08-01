@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Plus } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { LevelBadge } from "@/components/level-badge"
@@ -37,6 +38,7 @@ export function StudentsView({
   classes: initialClasses,
   locations,
 }: StudentsViewProps) {
+  const t = useTranslations("students")
   const [students, setStudents] = useState(initialStudents)
   const [classes, setClasses] = useState(initialClasses)
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
@@ -97,14 +99,14 @@ export function StudentsView({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">Students</h1>
-          <p className="text-sm text-muted-foreground">Every student, shared across coaches.</p>
+          <h1 className="font-heading text-2xl font-bold text-foreground">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button
           type="button"
           variant="positive"
           size="icon"
-          aria-label="Add student"
+          aria-label={t("addStudent")}
           onClick={handleAddClick}
         >
           <Plus />
@@ -112,9 +114,7 @@ export function StudentsView({
       </div>
 
       {students.length === 0 ? (
-        <div className="rounded-3xl bg-card p-6 text-sm text-muted-foreground">
-          No students yet.
-        </div>
+        <div className="rounded-3xl bg-card p-6 text-sm text-muted-foreground">{t("empty")}</div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {students.map((student) => (

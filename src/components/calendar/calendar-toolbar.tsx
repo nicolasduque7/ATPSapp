@@ -1,16 +1,10 @@
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Navigate, type ToolbarProps, type View } from "react-big-calendar"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { CalendarEvent, CalendarViewKey } from "@/components/calendar/types"
-
-const VIEW_OPTIONS: { key: CalendarViewKey; label: string }[] = [
-  { key: "month", label: "Month" },
-  { key: "week", label: "Week" },
-  { key: "three-day", label: "3-Day" },
-  { key: "day", label: "Day" },
-]
 
 export function CalendarToolbar({
   label,
@@ -18,6 +12,15 @@ export function CalendarToolbar({
   onNavigate,
   onView,
 }: ToolbarProps<CalendarEvent>) {
+  const t = useTranslations("calendar")
+
+  const VIEW_OPTIONS: { key: CalendarViewKey; label: string }[] = [
+    { key: "month", label: t("viewMonth") },
+    { key: "week", label: t("viewWeek") },
+    { key: "three-day", label: t("viewThreeDay") },
+    { key: "day", label: t("viewDay") },
+  ]
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
       <div className="flex items-center gap-2">
@@ -27,14 +30,14 @@ export function CalendarToolbar({
           size="sm"
           onClick={() => onNavigate(Navigate.TODAY)}
         >
-          Today
+          {t("today")}
         </Button>
         <div className="flex items-center">
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Previous"
+            aria-label={t("previous")}
             onClick={() => onNavigate(Navigate.PREVIOUS)}
           >
             <ChevronLeft />
@@ -43,7 +46,7 @@ export function CalendarToolbar({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Next"
+            aria-label={t("next")}
             onClick={() => onNavigate(Navigate.NEXT)}
           >
             <ChevronRight />

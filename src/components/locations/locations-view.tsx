@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { MapPin, Plus } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { SurfacePill } from "@/components/locations/surface-pill"
@@ -23,6 +24,7 @@ const DRAFT_LOCATION: Location = {
 }
 
 export function LocationsView({ locations: initialLocations }: LocationsViewProps) {
+  const t = useTranslations("locations")
   const [locations, setLocations] = useState(initialLocations)
   const [editingLocation, setEditingLocation] = useState<Location | null>(null)
   const [mode, setMode] = useState<"create" | "edit">("edit")
@@ -61,14 +63,14 @@ export function LocationsView({ locations: initialLocations }: LocationsViewProp
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">Locations</h1>
-          <p className="text-sm text-muted-foreground">Courts available to every coach.</p>
+          <h1 className="font-heading text-2xl font-bold text-foreground">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         <Button
           type="button"
           variant="positive"
           size="icon"
-          aria-label="Add location"
+          aria-label={t("addLocation")}
           onClick={handleAddClick}
         >
           <Plus />
@@ -76,9 +78,7 @@ export function LocationsView({ locations: initialLocations }: LocationsViewProp
       </div>
 
       {locations.length === 0 ? (
-        <div className="rounded-3xl bg-card p-6 text-sm text-muted-foreground">
-          No locations yet.
-        </div>
+        <div className="rounded-3xl bg-card p-6 text-sm text-muted-foreground">{t("empty")}</div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {locations.map((location) => (

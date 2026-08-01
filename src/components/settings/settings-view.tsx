@@ -3,12 +3,14 @@
 import { useState } from "react"
 import { format } from "date-fns"
 import { Clock, Plus, Repeat } from "lucide-react"
+import { useLocale, useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { formatClubDate, parseDateOnly } from "@/lib/dates"
+import { formatClubDate, parseDateOnly, type SeriesFrequency } from "@/lib/dates"
 import { getLocationColorStyle } from "@/lib/location-colors"
-import { ordinal, pluralUnit } from "@/components/calendar/recurrence-fields"
+import { getDateFnsLocale } from "@/lib/date-locale"
+import { ordinal, frequencyUnitLabel, weekdayShortLabel } from "@/components/calendar/recurrence-fields"
 import { AvailabilityEditDialog } from "@/components/calendar/availability-edit-dialog"
 import {
   createAvailabilityBlock,
@@ -33,18 +35,23 @@ function formatTime(hhmm: string): string {
   return format(new Date(1970, 0, 1, hours, minutes), "h:mm a")
 }
 
-const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
-function formatCadenceSummary(series: AvailabilitySeriesSummary): string {
+function formatCadenceSummary(
+  series: AvailabilitySeriesSummary,
+  tf: (key: string) => string,
+  tr: (key: string) => string,
+  tUntil: (key: "until", values: Record<string, string>) => string,
+  locale: string,
+  dateFnsLocale: ReturnType<typeof getDateFnsLocale>
+): string {
   const cadence =
     series.intervalCount === 1
-      ? series.frequency
-      : `Every ${series.intervalCount} ${pluralUnit(series.intervalCount, series.frequency.toLowerCase().replace("ly", ""))}`
+      ? tf(series.frequency)
+      : `${tr("every")} ${series.intervalCount} ${frequencyUnitLabel(series.frequency as SeriesFrequency, series.intervalCount, tr)}`
   const pattern =
     series.frequency === "Weekly"
-      ? (series.weekdays ?? []).map((d) => WEEKDAY_SHORT[d]).join(", ")
+      ? (series.weekdays ?? []).map((d) => weekdayShortLabel(d, tr)).join(", ")
       : series.frequency === "Monthly"
-        ? ordinal(series.dayOfMonth ?? 1)
+        ? ordinal(series.dayOfMonth ?? 1, locale)
         : null
 
   return [
@@ -54,7 +61,7 @@ function formatCadenceSummary(series: AvailabilitySeriesSummary): string {
     // series.endDate is a plain "YYYY-MM-DD" string, parsed and read within
     // this one client component — no server/client Date-crossing risk, so
     // no mount-guard is needed here.
-    `until ${format(parseDateOnly(series.endDate), "MMM d, yyyy")}`,
+    tUntil("until", { date: format(parseDateOnly(series.endDate), "MMM d, yyyy", { locale: dateFnsLocale }) }),
   ]
     .filter(Boolean)
     .join(" · ")
@@ -79,6 +86,11 @@ function LocationChips({ locationIds, locations }: { locationIds: string[]; loca
 }
 
 export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOffBlocks, locations }: SettingsViewProps) {
+  const t = useTranslations("settings")
+  const tf = useTranslations("enums.frequency")
+  const tr = useTranslations("recurrence")
+  const appLocale = useLocale()
+  const dateFnsLocale = getDateFnsLocale(appLocale)
   const [series, setSeries] = useState(initialSeries)
   const [oneOffBlocks, setOneOffBlocks] = useState(initialOneOffBlocks)
   const [dialogTarget, setDialogTarget] = useState<AvailabilityDialogTarget | null>(null)
@@ -171,24 +183,22 @@ export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOf
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">Settings</h1>
-          <p className="text-sm text-muted-foreground">Manage your account and preferences.</p>
+          <h1 className="font-heading text-2xl font-bold text-foreground">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-4 rounded-3xl bg-card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-heading text-lg font-bold text-foreground">Set up working hours</h2>
-            <p className="text-sm text-muted-foreground">
-              Let other coaches and students see when and where you&apos;re available to teach.
-            </p>
+            <h2 className="font-heading text-lg font-bold text-foreground">{t("workingHoursTitle")}</h2>
+            <p className="text-sm text-muted-foreground">{t("workingHoursSubtitle")}</p>
           </div>
           <Button
             type="button"
             variant="positive"
             size="icon"
-            aria-label="Add working hours"
+            aria-label={t("addWorkingHours")}
             onClick={() => setDialogTarget({ kind: "create" })}
           >
             <Plus />
@@ -196,9 +206,7 @@ export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOf
         </div>
 
         {isEmpty ? (
-          <div className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">
-            No working hours set up yet.
-          </div>
+          <div className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">{t("empty")}</div>
         ) : (
           <div className="flex flex-col gap-2">
             {series.map((s) => (
@@ -212,7 +220,9 @@ export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOf
                   <Repeat className="size-4 stroke-[1.75]" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-foreground">{formatCadenceSummary(s)}</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {formatCadenceSummary(s, tf, tr, t, appLocale, dateFnsLocale)}
+                  </span>
                   <LocationChips locationIds={s.locationIds} locations={locations} />
                 </div>
               </button>
@@ -229,7 +239,8 @@ export function SettingsView({ series: initialSeries, oneOffBlocks: initialOneOf
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium text-foreground">
-                    {formatClubDate(block.startTime, "EEE, MMM d")} · {formatClubDate(block.startTime, "h:mm a")} –{" "}
+                    {formatClubDate(block.startTime, "EEE, MMM d", dateFnsLocale)} ·{" "}
+                    {formatClubDate(block.startTime, "h:mm a")} –{" "}
                     {formatClubDate(block.endTime, "h:mm a")}
                   </span>
                   <LocationChips locationIds={block.locationIds} locations={locations} />

@@ -1,4 +1,7 @@
+"use client"
+
 import { Users } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -8,6 +11,7 @@ interface OpenClassTagProps {
 }
 
 export function OpenClassTag({ className, iconClassName }: OpenClassTagProps): React.JSX.Element {
+  const t = useTranslations("tags");
   return (
     <span
       className={cn(
@@ -16,7 +20,7 @@ export function OpenClassTag({ className, iconClassName }: OpenClassTagProps): R
       )}
     >
       <Users className={cn("size-3 shrink-0", iconClassName)} />
-      Open Class
+      {t("openClass")}
     </span>
   );
 }

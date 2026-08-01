@@ -176,6 +176,22 @@
   background-clip: padding-box;
 }
 
+@keyframes soft-pulse-glow {
+  0%,
+  100% {
+    text-shadow: 0 0 0 transparent;
+    opacity: 1;
+  }
+  50% {
+    text-shadow: 0 0 8px var(--primary);
+    opacity: 0.85;
+  }
+}
+
+.animate-soft-pulse-glow {
+  animation: soft-pulse-glow 2.8s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

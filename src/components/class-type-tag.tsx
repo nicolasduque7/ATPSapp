@@ -1,3 +1,7 @@
+"use client"
+
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
 import type { ClassType } from "@/lib/mock-data";
 
@@ -13,6 +17,7 @@ const CLASS_TYPE_STYLES: Record<ClassType, string> = {
 };
 
 export function ClassTypeTag({ type, className }: ClassTypeTagProps): React.JSX.Element {
+  const t = useTranslations("enums.classType");
   return (
     <span
       className={cn(
@@ -21,7 +26,7 @@ export function ClassTypeTag({ type, className }: ClassTypeTagProps): React.JSX.
         className
       )}
     >
-      {type}
+      {t(type)}
     </span>
   );
 }

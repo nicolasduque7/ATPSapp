@@ -1,6 +1,7 @@
 "use client"
 
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart } from "recharts"
+import { useTranslations } from "next-intl"
 
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 
@@ -28,13 +29,14 @@ export function StrokeRadarChart({
   serve,
   dropShot,
 }: StrokeRadarChartProps) {
+  const t = useTranslations("strokeRadar")
   const data = [
-    { stroke: "Forehand", rating: forehand },
-    { stroke: "Backhand", rating: backhand },
-    { stroke: "B. Slice", rating: backhandSlice },
-    { stroke: "Volley", rating: volley },
-    { stroke: "Serve", rating: serve },
-    { stroke: "Drop-shot", rating: dropShot },
+    { stroke: t("forehand"), rating: forehand },
+    { stroke: t("backhand"), rating: backhand },
+    { stroke: t("backhandSliceShort"), rating: backhandSlice },
+    { stroke: t("volley"), rating: volley },
+    { stroke: t("serve"), rating: serve },
+    { stroke: t("dropShot"), rating: dropShot },
   ]
 
   return (

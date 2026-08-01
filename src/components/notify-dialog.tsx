@@ -1,6 +1,7 @@
 "use client"
 
 import { TriangleAlert } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -11,20 +12,19 @@ interface NotifyDialogProps {
   message?: string
 }
 
-const DEFAULT_MESSAGE = "Don't forget to notify the coach/student about these changes."
-
-export function NotifyDialog({ open, onOpenChange, message = DEFAULT_MESSAGE }: NotifyDialogProps) {
+export function NotifyDialog({ open, onOpenChange, message }: NotifyDialogProps) {
+  const t = useTranslations("notifyDialog")
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent showClose={false} className="max-w-sm text-center">
         <DialogHeader className="items-center gap-2 pr-0">
           <TriangleAlert className="size-8 text-foreground" />
-          <DialogTitle>Reminder</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">{message}</p>
+        <p className="text-sm text-muted-foreground">{message ?? t("defaultMessage")}</p>
         <DialogFooter className="justify-center">
           <Button type="button" onClick={() => onOpenChange(false)}>
-            Got it
+            {t("gotIt")}
           </Button>
         </DialogFooter>
       </DialogContent>

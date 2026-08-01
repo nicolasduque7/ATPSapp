@@ -1,11 +1,11 @@
 import { format, getDay, parse, startOfWeek, type Locale } from "date-fns"
-import { enUS } from "date-fns/locale"
+import { enUS, es } from "date-fns/locale"
 import { dateFnsLocalizer } from "react-big-calendar"
 
 import { ThreeDayView } from "@/components/calendar/three-day-view"
 import { toClubZoned } from "@/lib/dates"
 
-const locales = { "en-US": enUS }
+const locales = { "en-US": enUS, es }
 
 // react-big-calendar's grid math (day columns, week start, time-of-day
 // positioning) runs entirely client-side and reads local Date getters
@@ -21,7 +21,10 @@ export const localizer = dateFnsLocalizer({
     format(toClubZoned(date), formatStr, options),
   parse: (value: string, formatStr: string, backupDate: Date, options?: { locale?: Locale }) =>
     parse(value, formatStr, backupDate, options),
-  startOfWeek: (date?: Date, options?: { locale?: Locale }) => startOfWeek(toClubZoned(date ?? new Date()), options),
+  // weekStartsOn is pinned to Sunday regardless of locale — the locale here
+  // is only for month/weekday name translation, not for changing which day
+  // the calendar grid starts on when switching languages (see PROJECT.md).
+  startOfWeek: (date?: Date) => startOfWeek(toClubZoned(date ?? new Date()), { weekStartsOn: 0 }),
   getDay: (date: Date) => getDay(toClubZoned(date)),
   locales,
 })

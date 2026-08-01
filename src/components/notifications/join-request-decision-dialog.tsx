@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useLocale, useTranslations } from "next-intl"
 import { formatClubDate } from "@/lib/dates"
+import { getDateFnsLocale } from "@/lib/date-locale"
 
 import {
   Dialog,
@@ -27,11 +29,12 @@ export function JoinRequestDecisionDialog({
   onOpenChange,
   onDecided,
 }: JoinRequestDecisionDialogProps) {
+  const t = useTranslations("notifications")
   return (
     <Dialog open={!!requestId} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Join request</DialogTitle>
+          <DialogTitle>{t("joinRequestDialogTitle")}</DialogTitle>
         </DialogHeader>
         {requestId && (
           <JoinRequestDecisionView
@@ -55,6 +58,8 @@ function JoinRequestDecisionView({
   onOpenChange: (open: boolean) => void
   onDecided: (requestId: string) => void
 }) {
+  const t = useTranslations("notifications")
+  const dateFnsLocale = getDateFnsLocale(useLocale())
   const [detail, setDetail] = useState<JoinRequestDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [decideError, setDecideError] = useState<string | null>(null)
@@ -67,12 +72,12 @@ function JoinRequestDecisionView({
         if (!cancelled) setDetail(data)
       })
       .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Couldn't load the request.")
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : t("errorLoadRequest"))
       })
     return () => {
       cancelled = true
     }
-  }, [requestId])
+  }, [requestId, t])
 
   async function handleDecide(approve: boolean) {
     setDecideError(null)
@@ -92,32 +97,32 @@ function JoinRequestDecisionView({
   }
 
   if (!detail) {
-    return <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
+    return <p className="mt-4 text-sm text-muted-foreground">{t("loading")}</p>
   }
 
   return (
     <div className="mt-4 flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Requested by</span>
+        <span className="text-xs font-medium text-muted-foreground">{t("requestedByLabel")}</span>
         <div className="flex h-9 items-center gap-2 rounded-xl border border-input bg-muted px-3 text-sm text-foreground">
           {detail.requestingStudentName}
           <LevelBadge level={detail.requestingStudentLevel} />
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Class</span>
+        <span className="text-xs font-medium text-muted-foreground">{t("class")}</span>
         <div className="flex h-9 items-center gap-2 rounded-xl border border-input bg-muted px-3 text-sm text-foreground">
           {detail.hostStudentName}
           <LevelBadge level={detail.hostStudentLevel} />
         </div>
       </div>
-      <ReadOnlyField label="Court" value={detail.locationName} />
+      <ReadOnlyField label={t("court")} value={detail.locationName} />
       <div className="grid grid-cols-2 gap-4">
-        <ReadOnlyField label="Start" value={formatClubDate(detail.startTime, "MMM d, h:mm a")} />
-        <ReadOnlyField label="End" value={formatClubDate(detail.endTime, "h:mm a")} />
+        <ReadOnlyField label={t("start")} value={formatClubDate(detail.startTime, "MMM d, h:mm a", dateFnsLocale)} />
+        <ReadOnlyField label={t("end")} value={formatClubDate(detail.endTime, "h:mm a")} />
       </div>
 
-      <p className="text-sm text-foreground">Authorize this student to join the class?</p>
+      <p className="text-sm text-foreground">{t("authorizeQuestion")}</p>
 
       {decideError && <p className="text-sm text-destructive">{decideError}</p>}
 
@@ -128,10 +133,10 @@ function JoinRequestDecisionView({
           onClick={() => handleDecide(false)}
           disabled={deciding}
         >
-          No
+          {t("no")}
         </Button>
         <Button type="button" onClick={() => handleDecide(true)} disabled={deciding}>
-          {deciding ? "Saving…" : "Yes"}
+          {deciding ? t("saving") : t("yes")}
         </Button>
       </DialogFooter>
     </div>

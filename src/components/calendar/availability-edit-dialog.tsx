@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useState } from "react"
 import { differenceInCalendarDays, startOfDay } from "date-fns"
 import { Trash2 } from "lucide-react"
+import { useLocale, useTranslations } from "next-intl"
 
 import {
   Dialog,
@@ -35,10 +36,10 @@ import {
   TimeField,
   WEEKDAY_LABELS,
   buildOffsetRange,
-  frequencyUnit,
+  frequencyUnitLabel,
   ordinal,
-  pluralUnit,
   toTimeInputValue,
+  weekdayShortLabel,
 } from "@/components/calendar/recurrence-fields"
 import type { Location } from "@/lib/mock-data"
 import type { AvailabilityDialogTarget, AvailabilityFormSubmission } from "@/components/calendar/types"
@@ -69,11 +70,12 @@ export function AvailabilityEditDialog({
   onSave,
   onDelete,
 }: AvailabilityEditDialogProps) {
+  const t = useTranslations("availabilityForm")
   return (
     <Dialog open={!!target} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{target?.kind === "create" ? "Add working hours" : "Edit working hours"}</DialogTitle>
+          <DialogTitle>{target?.kind === "create" ? t("addTitle") : t("editTitle")}</DialogTitle>
         </DialogHeader>
 
         {target && (
@@ -100,6 +102,11 @@ interface AvailabilityEditFormProps {
 }
 
 function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelete }: AvailabilityEditFormProps) {
+  const t = useTranslations("availabilityForm")
+  const tc = useTranslations("classForm")
+  const tf = useTranslations("enums.frequency")
+  const tr = useTranslations("recurrence")
+  const locale = useLocale()
   const formId = useId()
   const isBlockEdit = target.kind === "block"
   const isSeriesEdit = target.kind === "series"
@@ -190,13 +197,13 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
       })
       .catch((err) => {
         if (!cancelled) {
-          setSeriesMetaError(err instanceof Error ? err.message : "Couldn't load the series.")
+          setSeriesMetaError(err instanceof Error ? err.message : tc("errorLoadSeries"))
         }
       })
     return () => {
       cancelled = true
     }
-  }, [isBlockPartOfSeries, editScope, blockSeriesId, seriesMetaLoaded, today])
+  }, [isBlockPartOfSeries, editScope, blockSeriesId, seriesMetaLoaded, today, tc])
 
   const dateOptions = useMemo(
     () => buildOffsetRange(-DATE_RANGE_BEFORE, DATE_RANGE_AFTER, initialDateOffset),
@@ -223,26 +230,26 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
     formEvent.preventDefault()
 
     if (locationIds.length === 0) {
-      setError("Select at least one location.")
+      setError(t("errorSelectLocation"))
       return
     }
 
     if (usingRecurringFields) {
       if (recurringEndTime <= recurringStartTime) {
-        setError("End time must be after the start time.")
+        setError(tc("errorEndAfterStart"))
         return
       }
       const untilBound = target.kind === "create" ? recurringStartOffset : 0
       if (recurringUntilOffset < untilBound) {
-        setError("Until date must be on or after the start date.")
+        setError(tc("errorUntilAfterStart"))
         return
       }
       if (frequency === "Weekly" && recurringWeekdays.length === 0) {
-        setError("Select at least one day of the week.")
+        setError(tc("errorSelectWeekday"))
         return
       }
     } else if (singleEndTime <= singleStartTime) {
-      setError("End time must be after the start time.")
+      setError(tc("errorEndAfterStart"))
       return
     }
 
@@ -295,7 +302,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
       }
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.")
+      setError(err instanceof Error ? err.message : tc("errorGeneric"))
     } finally {
       setSaving(false)
     }
@@ -316,7 +323,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
         }
       }
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Couldn't delete. Try again.")
+      setDeleteError(err instanceof Error ? err.message : t("errorDeleteGeneric"))
       setDeleting(false)
     }
   }
@@ -325,8 +332,8 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
     <>
       <form id={formId} onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Locations</span>
-          <div role="group" aria-label="Locations" className="flex flex-wrap gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{t("locations")}</span>
+          <div role="group" aria-label={t("locations")} className="flex flex-wrap gap-2">
             {locations.map((location) => {
               const style = getLocationColorStyle(location.id, locations)
               const selected = locationIds.includes(location.id)
@@ -353,14 +360,14 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
 
         {target.kind === "create" && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Type</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("type")}</span>
             <SegmentedToggle
-              ariaLabel="Type"
+              ariaLabel={t("type")}
               value={bookingKind}
               onChange={setBookingKind}
               options={[
-                { value: "one-off", label: "One-off" },
-                { value: "recurring", label: "Recurring cadence" },
+                { value: "one-off", label: tc("oneTimeClass") },
+                { value: "recurring", label: t("recurringCadence") },
               ]}
             />
           </div>
@@ -368,14 +375,14 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
 
         {isBlockPartOfSeries && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Applies to</span>
+            <span className="text-xs font-medium text-muted-foreground">{tc("appliesTo")}</span>
             <SegmentedToggle
-              ariaLabel="Applies to"
+              ariaLabel={tc("appliesTo")}
               value={editScope}
               onChange={setEditScope}
               options={[
-                { value: "instance", label: "This block" },
-                { value: "series", label: "Whole series" },
+                { value: "instance", label: t("thisBlock") },
+                { value: "series", label: tc("wholeSeries") },
               ]}
             />
           </div>
@@ -385,7 +392,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
           <>
             <DateOffsetField
               id={`${formId}-date`}
-              label="Date"
+              label={tc("date")}
               value={dateOffset}
               onChange={setDateOffset}
               options={dateOptions}
@@ -394,13 +401,13 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
             <div className="grid grid-cols-2 gap-4">
               <TimeField
                 id={`${formId}-start`}
-                label="Start time"
+                label={tc("startTime")}
                 value={singleStartTime}
                 onChange={setSingleStartTime}
               />
               <TimeField
                 id={`${formId}-end`}
-                label="End time"
+                label={tc("endTime")}
                 value={singleEndTime}
                 onChange={setSingleEndTime}
               />
@@ -409,7 +416,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
         )}
 
         {usingRecurringFields && isBlockEdit && seriesMetaLoading && (
-          <p className="text-sm text-muted-foreground">Loading series details…</p>
+          <p className="text-sm text-muted-foreground">{tc("loadingSeries")}</p>
         )}
         {seriesMetaError && <p className="text-sm text-destructive">{seriesMetaError}</p>}
 
@@ -418,7 +425,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
             {target.kind === "create" && (
               <DateOffsetField
                 id={`${formId}-starts`}
-                label="Starts"
+                label={tc("starts")}
                 value={recurringStartOffset}
                 onChange={setRecurringStartOffset}
                 options={seriesRangeOptions}
@@ -433,19 +440,19 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
                     htmlFor={`${formId}-frequency`}
                     className="text-xs font-medium text-muted-foreground"
                   >
-                    Frequency
+                    {tc("frequency")}
                   </label>
                   <Select
                     value={frequency}
                     onValueChange={(value) => setFrequency(value as SeriesFrequency)}
                   >
                     <SelectTrigger id={`${formId}-frequency`}>
-                      <SelectValue>{(value: SeriesFrequency) => value}</SelectValue>
+                      <SelectValue>{(value: SeriesFrequency) => tf(value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {FREQUENCIES.map((f) => (
                         <SelectItem key={f} value={f}>
-                          {f}
+                          {tf(f)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -453,15 +460,15 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
                 </div>
               ) : (
                 <ReadOnlyField
-                  label="Frequency"
-                  value={frequency}
-                  caption="Can't be changed after creation."
+                  label={tc("frequency")}
+                  value={tf(frequency)}
+                  caption={tc("frequencyLocked")}
                 />
               )}
 
               <div className="flex flex-col gap-1.5">
                 <label htmlFor={`${formId}-every`} className="text-xs font-medium text-muted-foreground">
-                  Every
+                  {tc("every")}
                 </label>
                 <Select
                   value={String(intervalCount)}
@@ -469,13 +476,13 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
                 >
                   <SelectTrigger id={`${formId}-every`}>
                     <SelectValue>
-                      {(value: string) => `${value} ${pluralUnit(Number(value), frequencyUnit(frequency))}`}
+                      {(value: string) => `${value} ${frequencyUnitLabel(frequency, Number(value), tr)}`}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {EVERY_OPTIONS.map((n) => (
                       <SelectItem key={n} value={String(n)}>
-                        {n} {pluralUnit(n, frequencyUnit(frequency))}
+                        {n} {frequencyUnitLabel(frequency, n, tr)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -485,10 +492,10 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
 
             {frequency === "Weekly" && (
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">Repeats on</span>
+                <span className="text-xs font-medium text-muted-foreground">{tc("repeatsOn")}</span>
                 <div
                   role="group"
-                  aria-label="Weekdays"
+                  aria-label={tc("weekdays")}
                   className="grid grid-cols-7 gap-1 rounded-full bg-muted p-1"
                 >
                   {WEEKDAY_LABELS.map((label, index) => {
@@ -506,7 +513,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
                             : "text-muted-foreground hover:text-foreground"
                         )}
                       >
-                        {label}
+                        {weekdayShortLabel(index, tr)}
                       </button>
                     )
                   })}
@@ -517,19 +524,19 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
             {frequency === "Monthly" && (
               <div className="flex flex-col gap-1.5">
                 <label htmlFor={`${formId}-day-of-month`} className="text-xs font-medium text-muted-foreground">
-                  Day of month
+                  {tc("dayOfMonth")}
                 </label>
                 <Select
                   value={String(dayOfMonth)}
                   onValueChange={(value) => setDayOfMonth(Number(value as string))}
                 >
                   <SelectTrigger id={`${formId}-day-of-month`}>
-                    <SelectValue>{(value: string) => ordinal(Number(value))}</SelectValue>
+                    <SelectValue>{(value: string) => ordinal(Number(value), locale)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {DAY_OF_MONTH_OPTIONS.map((d) => (
                       <SelectItem key={d} value={String(d)}>
-                        {ordinal(d)}
+                        {ordinal(d, locale)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -540,13 +547,13 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
             <div className="grid grid-cols-2 gap-4">
               <TimeField
                 id={`${formId}-recurring-start`}
-                label="Start time"
+                label={tc("startTime")}
                 value={recurringStartTime}
                 onChange={setRecurringStartTime}
               />
               <TimeField
                 id={`${formId}-recurring-end`}
-                label="End time"
+                label={tc("endTime")}
                 value={recurringEndTime}
                 onChange={setRecurringEndTime}
               />
@@ -554,7 +561,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
 
             <DateOffsetField
               id={`${formId}-until`}
-              label="Until"
+              label={tc("until")}
               value={recurringUntilOffset}
               onChange={setRecurringUntilOffset}
               options={seriesRangeOptions}
@@ -568,10 +575,10 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
 
       <DialogFooter>
         <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
-          Cancel
+          {tc("cancel")}
         </Button>
         <Button type="submit" form={formId} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? tc("saving") : tc("save")}
         </Button>
       </DialogFooter>
 
@@ -581,9 +588,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
           {confirmingDelete ? (
             isBlockPartOfSeries ? (
               <div className="flex flex-col gap-2">
-                <p className="text-sm text-foreground">
-                  This is part of a recurring rule. Delete just this block, or the whole rule?
-                </p>
+                <p className="text-sm text-foreground">{t("deleteBlockOrSeriesQuestion")}</p>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
                     type="button"
@@ -593,7 +598,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
                     onClick={() => setConfirmingDelete(false)}
                     disabled={deleting}
                   >
-                    Keep
+                    {t("keep")}
                   </Button>
                   <Button
                     type="button"
@@ -603,7 +608,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
                     onClick={() => handleConfirmDelete(false)}
                     disabled={deleting}
                   >
-                    {deleting ? "Deleting…" : "Delete this block"}
+                    {deleting ? tc("deleting") : t("deleteThisBlock")}
                   </Button>
                   <Button
                     type="button"
@@ -613,14 +618,14 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
                     onClick={() => handleConfirmDelete(true)}
                     disabled={deleting}
                   >
-                    {deleting ? "Deleting…" : "Delete whole rule"}
+                    {deleting ? tc("deleting") : t("deleteWholeRule")}
                   </Button>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-2">
                 <p className="flex-1 text-sm text-foreground">
-                  {isSeriesEdit ? "Delete this whole recurring rule?" : "Delete this working-hours block?"}
+                  {isSeriesEdit ? t("deleteSeriesQuestion") : t("deleteBlockQuestion")}
                 </p>
                 <Button
                   type="button"
@@ -629,7 +634,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
                   onClick={() => setConfirmingDelete(false)}
                   disabled={deleting}
                 >
-                  Keep
+                  {t("keep")}
                 </Button>
                 <Button
                   type="button"
@@ -638,7 +643,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
                   onClick={() => handleConfirmDelete(false)}
                   disabled={deleting}
                 >
-                  {deleting ? "Deleting…" : "Confirm delete"}
+                  {deleting ? tc("deleting") : tc("confirmDelete")}
                 </Button>
               </div>
             )
@@ -650,7 +655,7 @@ function AvailabilityEditForm({ target, locations, onOpenChange, onSave, onDelet
               onClick={() => setConfirmingDelete(true)}
             >
               <Trash2 />
-              {isSeriesEdit ? "Delete recurring rule" : "Delete working hours"}
+              {isSeriesEdit ? t("deleteRecurringRule") : t("deleteWorkingHours")}
             </Button>
           )}
         </div>

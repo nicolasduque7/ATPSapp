@@ -1,6 +1,7 @@
 "use client"
 
 import { LogOut } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Avatar } from "@/components/avatar"
 import { Button } from "@/components/ui/button"
@@ -14,11 +15,13 @@ interface AccountMenuProps {
 }
 
 export function AccountMenu({ name, email, side = "right" }: AccountMenuProps) {
+  const t = useTranslations("accountMenu")
+
   return (
     <Popover>
       <PopoverTrigger
         type="button"
-        aria-label="Account menu"
+        aria-label={t("label")}
         className="cursor-pointer rounded-full border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
       >
         <Avatar name={name} />
@@ -35,7 +38,7 @@ export function AccountMenu({ name, email, side = "right" }: AccountMenuProps) {
             className="w-full justify-start gap-2 text-destructive hover:bg-destructive/10"
           >
             <LogOut />
-            Sign out
+            {t("signOut")}
           </Button>
         </form>
       </PopoverContent>

@@ -3,6 +3,7 @@
 import { useActionState, useId } from "react"
 import Link from "next/link"
 import { MailCheck } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { signup, type SignupState } from "@/app/signup/actions"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,7 @@ const initialState: SignupState = {}
 
 export function SignupForm() {
   const formId = useId()
+  const t = useTranslations("auth.signup")
   const [state, action, pending] = useActionState(signup, initialState)
 
   if (state.checkEmail) {
@@ -20,15 +22,13 @@ export function SignupForm() {
         <div className="flex size-12 items-center justify-center rounded-full bg-positive/10 text-positive">
           <MailCheck className="size-6" />
         </div>
-        <p className="font-heading text-base font-bold text-foreground">Check your email</p>
-        <p className="text-sm text-muted-foreground">
-          We sent you a confirmation link. Click it to activate your account, then sign in.
-        </p>
+        <p className="font-heading text-base font-bold text-foreground">{t("checkEmailTitle")}</p>
+        <p className="text-sm text-muted-foreground">{t("checkEmailBody")}</p>
         <Link
           href="/login"
           className="mt-2 text-sm font-medium text-foreground underline-offset-4 hover:underline"
         >
-          Back to sign in
+          {t("backToSignIn")}
         </Link>
       </div>
     )
@@ -39,7 +39,7 @@ export function SignupForm() {
       <form action={action} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-name`} className="text-xs font-medium text-muted-foreground">
-            Full name
+            {t("fullNameLabel")}
           </label>
           <Input
             id={`${formId}-name`}
@@ -47,13 +47,13 @@ export function SignupForm() {
             type="text"
             autoComplete="name"
             required
-            placeholder="Alex Rivera"
+            placeholder={t("fullNamePlaceholder")}
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-email`} className="text-xs font-medium text-muted-foreground">
-            Email
+            {t("emailLabel")}
           </label>
           <Input
             id={`${formId}-email`}
@@ -61,13 +61,13 @@ export function SignupForm() {
             type="email"
             autoComplete="email"
             required
-            placeholder="you@example.com"
+            placeholder={t("emailPlaceholder")}
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-password`} className="text-xs font-medium text-muted-foreground">
-            Password
+            {t("passwordLabel")}
           </label>
           <Input
             id={`${formId}-password`}
@@ -82,14 +82,17 @@ export function SignupForm() {
         {state.error && <p className="text-sm text-destructive">{state.error}</p>}
 
         <Button type="submit" variant="positive" className="mt-2 w-full" disabled={pending}>
-          {pending ? "Creating account…" : "Create account"}
+          {pending ? t("submitPending") : t("submit")}
         </Button>
       </form>
 
       <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
-        <Link href="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
-          Sign in
+        {t("alreadyHaveAccount")}{" "}
+        <Link
+          href="/login"
+          className="animate-soft-pulse-glow font-medium text-foreground underline-offset-4 hover:underline motion-reduce:animate-none"
+        >
+          {t("signInLink")}
         </Link>
       </p>
     </div>

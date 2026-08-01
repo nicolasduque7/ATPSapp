@@ -3,9 +3,11 @@
 import { useState } from "react"
 import { format } from "date-fns"
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react"
+import { useLocale, useTranslations } from "next-intl"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { getDateFnsLocale } from "@/lib/date-locale"
 
 interface MonthYearPickerProps {
   value: Date
@@ -13,14 +15,15 @@ interface MonthYearPickerProps {
   className?: string
 }
 
-const MONTH_LABELS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-]
-
 export function MonthYearPicker({ value, onChange, className }: MonthYearPickerProps) {
+  const t = useTranslations("monthYearPicker")
+  const dateFnsLocale = getDateFnsLocale(useLocale())
   const [open, setOpen] = useState(false)
   const [displayYear, setDisplayYear] = useState(value.getFullYear())
+
+  const monthLabels = Array.from({ length: 12 }, (_, i) =>
+    format(new Date(2000, i, 1), "MMM", { locale: dateFnsLocale })
+  )
 
   return (
     <Popover
@@ -38,13 +41,13 @@ export function MonthYearPicker({ value, onChange, className }: MonthYearPickerP
         )}
       >
         <Calendar className="size-3.5 shrink-0 text-muted-foreground" />
-        {format(value, "MMM yyyy")}
+        {format(value, "MMM yyyy", { locale: dateFnsLocale })}
       </PopoverTrigger>
       <PopoverContent className="w-56">
         <div className="flex items-center justify-between px-1">
           <button
             type="button"
-            aria-label="Previous year"
+            aria-label={t("previousYear")}
             onClick={() => setDisplayYear((y) => y - 1)}
             className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground motion-reduce:transition-none"
           >
@@ -53,7 +56,7 @@ export function MonthYearPicker({ value, onChange, className }: MonthYearPickerP
           <span className="text-sm font-semibold text-foreground">{displayYear}</span>
           <button
             type="button"
-            aria-label="Next year"
+            aria-label={t("nextYear")}
             onClick={() => setDisplayYear((y) => y + 1)}
             className="inline-flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground motion-reduce:transition-none"
           >
@@ -61,7 +64,7 @@ export function MonthYearPicker({ value, onChange, className }: MonthYearPickerP
           </button>
         </div>
         <div className="mt-2 grid grid-cols-4 gap-1">
-          {MONTH_LABELS.map((label, index) => {
+          {monthLabels.map((label, index) => {
             const selected = displayYear === value.getFullYear() && index === value.getMonth()
             return (
               <button

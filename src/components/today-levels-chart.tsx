@@ -1,6 +1,7 @@
 "use client"
 
 import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts"
+import { useTranslations } from "next-intl"
 
 import {
   ChartContainer,
@@ -22,13 +23,14 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export function TodayLevelsChart({ data }: TodayLevelsChartProps) {
+  const t = useTranslations("dashboard")
   const hasClasses = data.some((d) => d.count > 0)
   const maxCount = Math.max(1, ...data.map((d) => d.count))
 
   if (!hasClasses) {
     return (
       <p className="flex h-[130px] items-center text-sm text-muted-foreground">
-        No classes today.
+        {t("noClassesToday")}
       </p>
     )
   }

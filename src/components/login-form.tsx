@@ -2,6 +2,7 @@
 
 import { useActionState, useId } from "react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 
 import { login, type LoginState } from "@/app/login/actions"
 import { Button } from "@/components/ui/button"
@@ -11,6 +12,7 @@ const initialState: LoginState = {}
 
 export function LoginForm() {
   const formId = useId()
+  const t = useTranslations("auth.login")
   const [state, action, pending] = useActionState(login, initialState)
 
   return (
@@ -18,7 +20,7 @@ export function LoginForm() {
       <form action={action} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-email`} className="text-xs font-medium text-muted-foreground">
-            Email
+            {t("emailLabel")}
           </label>
           <Input
             id={`${formId}-email`}
@@ -26,13 +28,13 @@ export function LoginForm() {
             type="email"
             autoComplete="email"
             required
-            placeholder="you@example.com"
+            placeholder={t("emailPlaceholder")}
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-password`} className="text-xs font-medium text-muted-foreground">
-            Password
+            {t("passwordLabel")}
           </label>
           <Input
             id={`${formId}-password`}
@@ -46,14 +48,14 @@ export function LoginForm() {
         {state.error && <p className="text-sm text-destructive">{state.error}</p>}
 
         <Button type="submit" variant="positive" className="mt-2 w-full" disabled={pending}>
-          {pending ? "Signing in…" : "Sign in"}
+          {pending ? t("submitPending") : t("submit")}
         </Button>
       </form>
 
       <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{" "}
+        {t("noAccount")}{" "}
         <Link href="/signup" className="font-medium text-foreground underline-offset-4 hover:underline">
-          Sign up
+          {t("signUpLink")}
         </Link>
       </p>
     </div>

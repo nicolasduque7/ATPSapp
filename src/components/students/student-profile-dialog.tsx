@@ -3,6 +3,7 @@
 import { useId, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { ChevronRight, Trash2 } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import {
   Dialog,
@@ -84,11 +85,12 @@ export function StudentProfileDialog({
   onDeleteClass,
   onInviteSent,
 }: StudentProfileDialogProps) {
+  const t = useTranslations("students")
   return (
     <Dialog open={!!student} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader className="sr-only">
-          <DialogTitle>{mode === "create" ? "Add student" : "Edit student"}</DialogTitle>
+          <DialogTitle>{mode === "create" ? t("addTitle") : t("editTitle")}</DialogTitle>
         </DialogHeader>
 
         {student && (
@@ -139,6 +141,11 @@ function StudentProfileForm({
   onDeleteClass,
   onInviteSent,
 }: StudentProfileFormProps) {
+  const t = useTranslations("students")
+  const tg = useTranslations("enums.gender")
+  const th = useTranslations("enums.hand")
+  const tl = useTranslations("enums.studentLevel")
+  const te = useTranslations("enums.classType")
   const formId = useId()
   const [name, setName] = useState(student.name)
   const [nickname, setNickname] = useState(student.nickname ?? "")
@@ -198,7 +205,7 @@ function StudentProfileForm({
     formEvent.preventDefault()
 
     if (!name.trim()) {
-      setError("Name is required.")
+      setError(t("errorNameRequired"))
       return
     }
 
@@ -224,7 +231,7 @@ function StudentProfileForm({
       })
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.")
+      setError(err instanceof Error ? err.message : t("errorGeneric"))
     } finally {
       setSaving(false)
     }
@@ -236,7 +243,7 @@ function StudentProfileForm({
     try {
       await onDelete(student.id)
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Couldn't delete student. Try again.")
+      setDeleteError(err instanceof Error ? err.message : t("errorDeleteGeneric"))
       setDeleting(false)
     }
   }
@@ -286,8 +293,8 @@ function StudentProfileForm({
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            aria-label="Name"
-            placeholder="Student name"
+            aria-label={t("nameLabel")}
+            placeholder={t("namePlaceholder")}
             className="h-9 border-0 bg-transparent p-0 font-heading text-lg font-bold text-foreground focus-visible:ring-0"
           />
           <div className="flex items-center gap-2">
@@ -295,8 +302,8 @@ function StudentProfileForm({
             <Input
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              aria-label="Nickname"
-              placeholder="Nickname"
+              aria-label={t("nicknameLabel")}
+              placeholder={t("nicknamePlaceholder")}
               className="h-7 max-w-32 text-xs"
             />
           </div>
@@ -305,8 +312,8 @@ function StudentProfileForm({
 
       <form id={formId} onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Level</span>
-          <div role="radiogroup" aria-label="Level" className="flex flex-wrap gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{t("level")}</span>
+          <div role="radiogroup" aria-label={t("level")} className="flex flex-wrap gap-2">
             {STUDENT_LEVELS.map((l) => (
               <button
                 key={l}
@@ -321,52 +328,52 @@ function StudentProfileForm({
                     : "border-transparent bg-muted text-muted-foreground hover:bg-accent"
                 )}
               >
-                {l}
+                {tl(l)}
               </button>
             ))}
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <TileField label="Age">
+          <TileField label={t("age")}>
             <Input
               type="number"
               min={0}
               value={age}
               onChange={(e) => setAge(Math.max(0, Number(e.target.value)))}
-              aria-label="Age"
+              aria-label={t("age")}
               className="h-auto border-0 bg-transparent p-0 text-base font-bold text-foreground focus-visible:ring-0"
             />
           </TileField>
-          <TileField label="Gender">
+          <TileField label={t("gender")}>
             <Select value={gender} onValueChange={(value) => setGender(value as Gender)}>
               <SelectTrigger
-                aria-label="Gender"
+                aria-label={t("gender")}
                 className="h-auto border-0 bg-transparent p-0 text-base font-bold text-foreground"
               >
-                <SelectValue>{(value: string) => value}</SelectValue>
+                <SelectValue>{(value: Gender) => tg(value)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {GENDER_OPTIONS.map((option) => (
                   <SelectItem key={option} value={option}>
-                    {option}
+                    {tg(option)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </TileField>
-          <TileField label="Hand">
+          <TileField label={t("hand")}>
             <Select value={hand} onValueChange={(value) => setHand(value as Hand)}>
               <SelectTrigger
-                aria-label="Hand"
+                aria-label={t("hand")}
                 className="h-auto border-0 bg-transparent p-0 text-base font-bold text-foreground"
               >
-                <SelectValue>{(value: string) => value}</SelectValue>
+                <SelectValue>{(value: Hand) => th(value)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {HAND_OPTIONS.map((option) => (
                   <SelectItem key={option} value={option}>
-                    {option}
+                    {th(option)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -375,46 +382,46 @@ function StudentProfileForm({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <TileField label="Racket">
+          <TileField label={t("racket")}>
             <Input
               value={racketType}
               onChange={(e) => setRacketType(e.target.value)}
-              placeholder="e.g. Wilson Blade 98"
-              aria-label="Racket"
+              placeholder={t("racketPlaceholder")}
+              aria-label={t("racket")}
               className="h-auto border-0 bg-transparent p-0 text-base font-bold text-foreground focus-visible:ring-0"
             />
           </TileField>
-          <TileField label="Since">
+          <TileField label={t("since")}>
             <MonthYearPicker value={since} onChange={setSince} />
           </TileField>
         </div>
 
         <div className="flex flex-col gap-3 rounded-2xl bg-muted p-4">
           <span className="text-xs font-semibold tracking-wide text-primary uppercase">
-            Stroke ratings
+            {t("strokeRatings")}
           </span>
-          <RatingSlider label="Forehand" value={forehandRating} onChange={setForehandRating} />
-          <RatingSlider label="Backhand" value={backhandRating} onChange={setBackhandRating} />
+          <RatingSlider label={t("forehand")} value={forehandRating} onChange={setForehandRating} />
+          <RatingSlider label={t("backhand")} value={backhandRating} onChange={setBackhandRating} />
           <RatingSlider
-            label="Backhand slice"
+            label={t("backhandSlice")}
             value={backhandSliceRating}
             onChange={setBackhandSliceRating}
           />
-          <RatingSlider label="Volley" value={volleyRating} onChange={setVolleyRating} />
-          <RatingSlider label="Serve" value={serveRating} onChange={setServeRating} />
-          <RatingSlider label="Drop-shot" value={dropShotRating} onChange={setDropShotRating} />
+          <RatingSlider label={t("volley")} value={volleyRating} onChange={setVolleyRating} />
+          <RatingSlider label={t("serve")} value={serveRating} onChange={setServeRating} />
+          <RatingSlider label={t("dropShot")} value={dropShotRating} onChange={setDropShotRating} />
         </div>
 
         <div className="flex flex-col gap-1.5 rounded-2xl bg-muted p-4">
           <span className="text-xs font-semibold tracking-wide text-primary uppercase">
-            Coaching note
+            {t("coachingNote")}
           </span>
           <textarea
             value={coachingNote}
             onChange={(e) => setCoachingNote(e.target.value)}
             rows={2}
-            placeholder="Add a note…"
-            aria-label="Coaching note"
+            placeholder={t("coachingNotePlaceholder")}
+            aria-label={t("coachingNote")}
             className="resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -424,19 +431,19 @@ function StudentProfileForm({
 
       <DialogFooter>
         <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button type="submit" form={formId} variant="positive" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("saving") : t("save")}
         </Button>
       </DialogFooter>
 
       {mode === "edit" && (
         <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
-          <span className="text-xs font-medium text-muted-foreground">Student login</span>
+          <span className="text-xs font-medium text-muted-foreground">{t("studentLogin")}</span>
           {student.linked ? (
             <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-positive/10 px-2.5 py-1 text-xs font-medium text-positive">
-              Linked
+              {t("linked")}
             </span>
           ) : (
             <StudentInviteControl
@@ -453,11 +460,7 @@ function StudentProfileForm({
           {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           {confirmingDelete ? (
             <div className="flex flex-col gap-2">
-              <p className="text-sm text-foreground">
-                Delete {student.name}? This removes them from the shared roster for every coach. If
-                they still have any classes on the calendar, deletion will be blocked until those are
-                removed.
-              </p>
+              <p className="text-sm text-foreground">{t("deleteConfirm", { name: student.name })}</p>
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -469,7 +472,7 @@ function StudentProfileForm({
                   }}
                   disabled={deleting}
                 >
-                  Keep student
+                  {t("keepStudent")}
                 </Button>
                 <Button
                   type="button"
@@ -478,7 +481,7 @@ function StudentProfileForm({
                   onClick={handleConfirmDeleteStudent}
                   disabled={deleting}
                 >
-                  {deleting ? "Deleting…" : "Confirm delete"}
+                  {deleting ? t("deleting") : t("confirmDelete")}
                 </Button>
               </div>
             </div>
@@ -490,17 +493,17 @@ function StudentProfileForm({
               onClick={() => setConfirmingDelete(true)}
             >
               <Trash2 />
-              Delete student
+              {t("deleteStudent")}
             </Button>
           )}
         </div>
       )}
 
       <div className="mt-6 border-t border-border pt-5">
-        <h3 className="font-heading text-base font-bold text-foreground">Upcoming classes</h3>
+        <h3 className="font-heading text-base font-bold text-foreground">{t("upcomingClasses")}</h3>
 
         {upcoming.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">No upcoming classes.</p>
+          <p className="mt-3 text-sm text-muted-foreground">{t("noUpcomingClasses")}</p>
         ) : (
           <div className="mt-3 flex flex-col gap-2">
             {upcoming.map((classInstance) => {
@@ -523,7 +526,7 @@ function StudentProfileForm({
                   </div>
                   <div className="flex flex-1 flex-col gap-1">
                     <span className="text-sm text-foreground">
-                      {classInstance.type} · {formatDuration(classInstance.durationMinutes)}
+                      {te(classInstance.type)} · {formatDuration(classInstance.durationMinutes)}
                     </span>
                     {location && style && (
                       <span
@@ -572,6 +575,7 @@ function StudentInviteControl({
   initialEmail: string
   onInviteSent: (email: string) => void
 }) {
+  const t = useTranslations("students")
   const [email, setEmail] = useState(initialEmail)
   const [link, setLink] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -587,7 +591,7 @@ function StudentInviteControl({
       setLink(inviteLink)
       onInviteSent(email)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't create the invite. Try again.")
+      setError(err instanceof Error ? err.message : t("errorInviteGeneric"))
     } finally {
       setSending(false)
     }
@@ -606,8 +610,8 @@ function StudentInviteControl({
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="student@example.com"
-          aria-label="Student email"
+          placeholder={t("emailPlaceholder")}
+          aria-label={t("studentEmail")}
           className="h-9"
         />
         <Button
@@ -617,7 +621,7 @@ function StudentInviteControl({
           onClick={handleInvite}
           disabled={sending || !email.trim()}
         >
-          {sending ? "Inviting…" : "Invite"}
+          {sending ? t("inviting") : t("invite")}
         </Button>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -625,7 +629,7 @@ function StudentInviteControl({
         <div className="flex items-center gap-2 rounded-2xl bg-muted p-3">
           <span className="flex-1 truncate text-xs text-muted-foreground">{link}</span>
           <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
-            {copied ? "Copied" : "Copy"}
+            {copied ? t("copied") : t("copy")}
           </Button>
         </div>
       )}

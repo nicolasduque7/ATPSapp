@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 import { requireStudent } from "@/lib/auth";
 import { getStudentClasses } from "@/lib/queries/classes";
 import { getLocationsForStudent } from "@/lib/queries/locations";
@@ -21,12 +23,13 @@ import { StudentNextClassCard } from "@/components/student-next-class-card";
 import { CountUpNumber } from "@/components/count-up-number";
 
 export default async function StudentHomePage(): Promise<React.JSX.Element> {
-  const [student, profile, classes, coaches, locations] = await Promise.all([
+  const [student, profile, classes, coaches, locations, t] = await Promise.all([
     requireStudent(),
     getCurrentStudentProfile(),
     getStudentClasses(),
     getCoachesForStudent(),
     getLocationsForStudent(),
+    getTranslations("studentHome"),
   ]);
 
   const todayClasses = getClassesForToday(classes);
@@ -45,10 +48,8 @@ export default async function StudentHomePage(): Promise<React.JSX.Element> {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-foreground">Hello, {firstName}</h1>
-          <p className="text-sm text-muted-foreground">
-            Here&apos;s what&apos;s on your schedule.
-          </p>
+          <h1 className="font-heading text-2xl font-bold text-foreground">{t("greeting", { name: firstName })}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
         <StudentAddClassButton coaches={coaches} locations={locations} />
       </div>
@@ -63,7 +64,7 @@ export default async function StudentHomePage(): Promise<React.JSX.Element> {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:col-span-2">
           <div className="flex animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-75 motion-reduce:animate-none flex-col rounded-3xl bg-card p-5">
-            <p className="font-heading text-base font-bold text-foreground">Today&apos;s classes</p>
+            <p className="font-heading text-base font-bold text-foreground">{t("todaysClasses")}</p>
             <div className="mt-2 flex flex-1 flex-col justify-center">
               <ClassesRingStat
                 completed={completedToday}
@@ -75,7 +76,7 @@ export default async function StudentHomePage(): Promise<React.JSX.Element> {
           </div>
 
           <div className="flex animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-150 motion-reduce:animate-none flex-col rounded-3xl bg-card p-5">
-            <p className="font-heading text-base font-bold text-foreground">Stroke strength</p>
+            <p className="font-heading text-base font-bold text-foreground">{t("strokeLevel")}</p>
             <div className="mt-2 flex flex-1 flex-col justify-center">
               <StrokeRadarChart
                 forehand={profile.forehandRating}
@@ -89,37 +90,37 @@ export default async function StudentHomePage(): Promise<React.JSX.Element> {
           </div>
 
           <div className="flex animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-200 motion-reduce:animate-none flex-col rounded-3xl bg-card p-5">
-            <p className="font-heading text-base font-bold text-foreground">hrs</p>
+            <p className="font-heading text-base font-bold text-foreground">{t("hoursShortLabel")}</p>
             <div className="mt-2 flex flex-1 flex-col justify-center">
               <p className="font-heading text-3xl font-bold text-foreground">
                 <CountUpNumber value={hoursToday} decimals={1} suffix="h" />
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">Hours trained today</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("hoursTrainedToday")}</p>
             </div>
           </div>
         </div>
 
         <div className="flex animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-300 motion-reduce:animate-none flex-col rounded-3xl bg-card p-5">
-          <p className="font-heading text-base font-bold text-foreground">Weekly</p>
+          <p className="font-heading text-base font-bold text-foreground">{t("weekly")}</p>
           <div className="mt-2 flex flex-1 flex-col justify-center gap-2">
             <div>
               <p className="font-heading text-2xl font-bold text-foreground">
                 <CountUpNumber value={classesThisWeek} />
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">Classes trained</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("classesTrained")}</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="font-heading text-lg font-bold text-foreground">
                   <CountUpNumber value={coachesThisWeek} />
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">Coaches trained with</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("coachesTrainedWith")}</p>
               </div>
               <div>
                 <p className="font-heading text-lg font-bold text-foreground">
                   {busiestDay ?? "—"}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">Busiest day</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("busiestDay")}</p>
               </div>
             </div>
           </div>

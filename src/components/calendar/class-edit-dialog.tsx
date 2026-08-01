@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useState } from "react"
 import { differenceInCalendarDays, startOfDay } from "date-fns"
 import { Trash2 } from "lucide-react"
+import { useLocale, useTranslations } from "next-intl"
 
 import {
   Dialog,
@@ -40,10 +41,10 @@ import {
   TimeField,
   WEEKDAY_LABELS,
   buildOffsetRange,
-  frequencyUnit,
+  frequencyUnitLabel,
   ordinal,
-  pluralUnit,
   toTimeInputValue,
+  weekdayShortLabel,
 } from "@/components/calendar/recurrence-fields"
 
 interface ClassEditDialogProps {
@@ -107,11 +108,12 @@ export function ClassEditDialog({
   onSave,
   onDelete,
 }: ClassEditDialogProps) {
+  const t = useTranslations("classForm")
   return (
     <Dialog open={!!event} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? "Add class" : "Edit class"}</DialogTitle>
+          <DialogTitle>{mode === "create" ? t("addClassTitle") : t("editClassTitle")}</DialogTitle>
         </DialogHeader>
 
         {event && (
@@ -150,6 +152,11 @@ function ClassEditForm({
   onSave,
   onDelete,
 }: ClassEditFormProps) {
+  const t = useTranslations("classForm")
+  const te = useTranslations("enums.classType")
+  const tf = useTranslations("enums.frequency")
+  const tr = useTranslations("recurrence")
+  const locale = useLocale()
   const formId = useId()
   const [studentId, setStudentId] = useState<string | null>(
     mode === "create" ? null : event.resource.studentId
@@ -227,13 +234,13 @@ function ClassEditForm({
       })
       .catch((err) => {
         if (!cancelled) {
-          setSeriesMetaError(err instanceof Error ? err.message : "Couldn't load the series.")
+          setSeriesMetaError(err instanceof Error ? err.message : t("errorLoadSeries"))
         }
       })
     return () => {
       cancelled = true
     }
-  }, [mode, isSeriesInstance, editScope, seriesId, seriesMetaLoaded, today])
+  }, [mode, isSeriesInstance, editScope, seriesId, seriesMetaLoaded, today, t])
 
   const dateOptions = useMemo(
     () => buildOffsetRange(-DATE_RANGE_BEFORE, DATE_RANGE_AFTER, initialDateOffset),
@@ -254,7 +261,7 @@ function ClassEditForm({
     formEvent.preventDefault()
 
     if (!studentId || !locationId || !classType) {
-      setError("Select a student, location, and type.")
+      setError(t("errorSelectAll"))
       return
     }
 
@@ -264,21 +271,21 @@ function ClassEditForm({
 
     if (usingRecurringFields) {
       if (recurringEndTime <= recurringStartTime) {
-        setError("End time must be after the start time.")
+        setError(t("errorEndAfterStart"))
         return
       }
       const untilBound = mode === "create" ? recurringStartOffset : 0
       if (recurringUntilOffset < untilBound) {
-        setError("Until date must be on or after the start date.")
+        setError(t("errorUntilAfterStart"))
         return
       }
       if (frequency === "Weekly" && recurringWeekdays.length === 0) {
-        setError("Select at least one day of the week.")
+        setError(t("errorSelectWeekday"))
         return
       }
     } else {
       if (singleEndTime <= singleStartTime) {
-        setError("End time must be after the start time.")
+        setError(t("errorEndAfterStart"))
         return
       }
     }
@@ -342,7 +349,7 @@ function ClassEditForm({
       }
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.")
+      setError(err instanceof Error ? err.message : t("errorGeneric"))
     } finally {
       setSaving(false)
     }
@@ -355,7 +362,7 @@ function ClassEditForm({
     try {
       await onDelete(event.id, { deleteSeries })
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Couldn't delete class. Try again.")
+      setDeleteError(err instanceof Error ? err.message : t("errorDeleteGeneric"))
       setDeleting(false)
     }
   }
@@ -365,14 +372,14 @@ function ClassEditForm({
       <form id={formId} onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${formId}-student`} className="text-xs font-medium text-muted-foreground">
-            Student
+            {t("student")}
           </label>
           <Select value={studentId} onValueChange={(value) => setStudentId(value as string)}>
             <SelectTrigger id={`${formId}-student`}>
               <SelectValue>
                 {(value: string | null) => {
                   const s = students.find((student) => student.id === value)
-                  if (!s) return <span className="text-muted-foreground">Select a student</span>
+                  if (!s) return <span className="text-muted-foreground">{t("selectStudent")}</span>
                   return `${s.name} · ${s.level}`
                 }}
               </SelectValue>
@@ -388,8 +395,8 @@ function ClassEditForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Location</span>
-          <div role="radiogroup" aria-label="Location" className="flex flex-wrap gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{t("location")}</span>
+          <div role="radiogroup" aria-label={t("location")} className="flex flex-wrap gap-2">
             {locations.map((location) => {
               const style = getLocationColorStyle(location.id, locations)
               const selected = location.id === locationId
@@ -416,23 +423,23 @@ function ClassEditForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Type</span>
-          <div role="radiogroup" aria-label="Type" className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1">
-            {CLASS_TYPES.map((t) => (
+          <span className="text-xs font-medium text-muted-foreground">{t("type")}</span>
+          <div role="radiogroup" aria-label={t("type")} className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1">
+            {CLASS_TYPES.map((classTypeOption) => (
               <button
-                key={t}
+                key={classTypeOption}
                 type="button"
                 role="radio"
-                aria-checked={classType === t}
-                onClick={() => setClassType(t)}
+                aria-checked={classType === classTypeOption}
+                onClick={() => setClassType(classTypeOption)}
                 className={cn(
                   "cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none",
-                  classType === t
+                  classType === classTypeOption
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {t}
+                {te(classTypeOption)}
               </button>
             ))}
           </div>
@@ -440,14 +447,14 @@ function ClassEditForm({
 
         {mode === "create" && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Booking type</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("bookingType")}</span>
             <SegmentedToggle
-              ariaLabel="Booking type"
+              ariaLabel={t("bookingType")}
               value={bookingKind}
               onChange={setBookingKind}
               options={[
-                { value: "one-off", label: "One-off" },
-                { value: "recurring", label: "Recurring" },
+                { value: "one-off", label: t("oneTimeClass") },
+                { value: "recurring", label: t("recurring") },
               ]}
             />
           </div>
@@ -455,14 +462,14 @@ function ClassEditForm({
 
         {mode === "edit" && isSeriesInstance && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Applies to</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("appliesTo")}</span>
             <SegmentedToggle
-              ariaLabel="Applies to"
+              ariaLabel={t("appliesTo")}
               value={editScope}
               onChange={setEditScope}
               options={[
-                { value: "instance", label: "This class" },
-                { value: "series", label: "Whole series" },
+                { value: "instance", label: t("thisClass") },
+                { value: "series", label: t("wholeSeries") },
               ]}
             />
           </div>
@@ -472,7 +479,7 @@ function ClassEditForm({
           <>
             <DateOffsetField
               id={`${formId}-date`}
-              label="Date"
+              label={t("date")}
               value={dateOffset}
               onChange={setDateOffset}
               options={dateOptions}
@@ -481,13 +488,13 @@ function ClassEditForm({
             <div className="grid grid-cols-2 gap-4">
               <TimeField
                 id={`${formId}-start`}
-                label="Start time"
+                label={t("startTime")}
                 value={singleStartTime}
                 onChange={setSingleStartTime}
               />
               <TimeField
                 id={`${formId}-end`}
-                label="End time"
+                label={t("endTime")}
                 value={singleEndTime}
                 onChange={setSingleEndTime}
               />
@@ -502,7 +509,7 @@ function ClassEditForm({
         )}
 
         {usingRecurringFields && mode === "edit" && seriesMetaLoading && (
-          <p className="text-sm text-muted-foreground">Loading series details…</p>
+          <p className="text-sm text-muted-foreground">{t("loadingSeries")}</p>
         )}
         {seriesMetaError && <p className="text-sm text-destructive">{seriesMetaError}</p>}
 
@@ -511,7 +518,7 @@ function ClassEditForm({
             {mode === "create" && (
               <DateOffsetField
                 id={`${formId}-starts`}
-                label="Starts"
+                label={t("starts")}
                 value={recurringStartOffset}
                 onChange={setRecurringStartOffset}
                 options={seriesRangeOptions}
@@ -526,19 +533,19 @@ function ClassEditForm({
                     htmlFor={`${formId}-frequency`}
                     className="text-xs font-medium text-muted-foreground"
                   >
-                    Frequency
+                    {t("frequency")}
                   </label>
                   <Select
                     value={frequency}
                     onValueChange={(value) => setFrequency(value as SeriesFrequency)}
                   >
                     <SelectTrigger id={`${formId}-frequency`}>
-                      <SelectValue>{(value: SeriesFrequency) => value}</SelectValue>
+                      <SelectValue>{(value: SeriesFrequency) => tf(value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {FREQUENCIES.map((f) => (
                         <SelectItem key={f} value={f}>
-                          {f}
+                          {tf(f)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -546,15 +553,15 @@ function ClassEditForm({
                 </div>
               ) : (
                 <ReadOnlyField
-                  label="Frequency"
-                  value={frequency}
-                  caption="Can't be changed after creation."
+                  label={t("frequency")}
+                  value={tf(frequency)}
+                  caption={t("frequencyLocked")}
                 />
               )}
 
               <div className="flex flex-col gap-1.5">
                 <label htmlFor={`${formId}-every`} className="text-xs font-medium text-muted-foreground">
-                  Every
+                  {t("every")}
                 </label>
                 <Select
                   value={String(intervalCount)}
@@ -562,13 +569,13 @@ function ClassEditForm({
                 >
                   <SelectTrigger id={`${formId}-every`}>
                     <SelectValue>
-                      {(value: string) => `${value} ${pluralUnit(Number(value), frequencyUnit(frequency))}`}
+                      {(value: string) => `${value} ${frequencyUnitLabel(frequency, Number(value), tr)}`}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {EVERY_OPTIONS.map((n) => (
                       <SelectItem key={n} value={String(n)}>
-                        {n} {pluralUnit(n, frequencyUnit(frequency))}
+                        {n} {frequencyUnitLabel(frequency, n, tr)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -578,10 +585,10 @@ function ClassEditForm({
 
             {frequency === "Weekly" && (
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">Repeats on</span>
+                <span className="text-xs font-medium text-muted-foreground">{t("repeatsOn")}</span>
                 <div
                   role="group"
-                  aria-label="Weekdays"
+                  aria-label={t("weekdays")}
                   className="grid grid-cols-7 gap-1 rounded-full bg-muted p-1"
                 >
                   {WEEKDAY_LABELS.map((label, index) => {
@@ -599,7 +606,7 @@ function ClassEditForm({
                             : "text-muted-foreground hover:text-foreground"
                         )}
                       >
-                        {label}
+                        {weekdayShortLabel(index, tr)}
                       </button>
                     )
                   })}
@@ -610,19 +617,19 @@ function ClassEditForm({
             {frequency === "Monthly" && (
               <div className="flex flex-col gap-1.5">
                 <label htmlFor={`${formId}-day-of-month`} className="text-xs font-medium text-muted-foreground">
-                  Day of month
+                  {t("dayOfMonth")}
                 </label>
                 <Select
                   value={String(dayOfMonth)}
                   onValueChange={(value) => setDayOfMonth(Number(value as string))}
                 >
                   <SelectTrigger id={`${formId}-day-of-month`}>
-                    <SelectValue>{(value: string) => ordinal(Number(value))}</SelectValue>
+                    <SelectValue>{(value: string) => ordinal(Number(value), locale)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {DAY_OF_MONTH_OPTIONS.map((d) => (
                       <SelectItem key={d} value={String(d)}>
-                        {ordinal(d)}
+                        {ordinal(d, locale)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -633,13 +640,13 @@ function ClassEditForm({
             <div className="grid grid-cols-2 gap-4">
               <TimeField
                 id={`${formId}-recurring-start`}
-                label="Start time"
+                label={t("startTime")}
                 value={recurringStartTime}
                 onChange={setRecurringStartTime}
               />
               <TimeField
                 id={`${formId}-recurring-end`}
-                label="End time"
+                label={t("endTime")}
                 value={recurringEndTime}
                 onChange={setRecurringEndTime}
               />
@@ -647,7 +654,7 @@ function ClassEditForm({
 
             <DateOffsetField
               id={`${formId}-until`}
-              label="Until"
+              label={t("until")}
               value={recurringUntilOffset}
               onChange={setRecurringUntilOffset}
               options={seriesRangeOptions}
@@ -661,10 +668,10 @@ function ClassEditForm({
 
       <DialogFooter>
         <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button type="submit" form={formId} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? t("saving") : t("save")}
         </Button>
       </DialogFooter>
 
@@ -674,9 +681,7 @@ function ClassEditForm({
           {confirmingDelete ? (
             seriesId ? (
               <div className="flex flex-col gap-2">
-                <p className="text-sm text-foreground">
-                  This class is part of a recurring series. Delete just this class, or the whole series?
-                </p>
+                <p className="text-sm text-foreground">{t("deleteSeriesQuestion")}</p>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
                     type="button"
@@ -686,7 +691,7 @@ function ClassEditForm({
                     onClick={() => setConfirmingDelete(false)}
                     disabled={deleting}
                   >
-                    Keep class
+                    {t("keepClass")}
                   </Button>
                   <Button
                     type="button"
@@ -696,7 +701,7 @@ function ClassEditForm({
                     onClick={() => handleConfirmDelete(false)}
                     disabled={deleting}
                   >
-                    {deleting ? "Deleting…" : "Delete this class"}
+                    {deleting ? t("deleting") : t("deleteThisClass")}
                   </Button>
                   <Button
                     type="button"
@@ -706,13 +711,13 @@ function ClassEditForm({
                     onClick={() => handleConfirmDelete(true)}
                     disabled={deleting}
                   >
-                    {deleting ? "Deleting…" : "Delete whole series"}
+                    {deleting ? t("deleting") : t("deleteWholeSeries")}
                   </Button>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <p className="flex-1 text-sm text-foreground">Delete this class?</p>
+                <p className="flex-1 text-sm text-foreground">{t("deleteThisClassQuestion")}</p>
                 <Button
                   type="button"
                   variant="secondary"
@@ -720,7 +725,7 @@ function ClassEditForm({
                   onClick={() => setConfirmingDelete(false)}
                   disabled={deleting}
                 >
-                  Keep class
+                  {t("keepClass")}
                 </Button>
                 <Button
                   type="button"
@@ -729,7 +734,7 @@ function ClassEditForm({
                   onClick={() => handleConfirmDelete(false)}
                   disabled={deleting}
                 >
-                  {deleting ? "Deleting…" : "Confirm delete"}
+                  {deleting ? t("deleting") : t("confirmDelete")}
                 </Button>
               </div>
             )
@@ -741,7 +746,7 @@ function ClassEditForm({
               onClick={() => setConfirmingDelete(true)}
             >
               <Trash2 />
-              Delete class
+              {t("deleteClass")}
             </Button>
           )}
         </div>

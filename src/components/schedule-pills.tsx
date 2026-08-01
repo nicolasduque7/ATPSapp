@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { cn } from "@/lib/utils"
 import { useHasMounted } from "@/lib/hooks/use-has-mounted"
@@ -34,6 +35,7 @@ export function SchedulePills({
   entityIdKey = "studentId",
   calendarHref = "/calendar",
 }: SchedulePillsProps) {
+  const t = useTranslations("dashboard")
   const hasMounted = useHasMounted()
   const [now, setNow] = useState(() => new Date())
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -66,16 +68,16 @@ export function SchedulePills({
     <div className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 delay-300 motion-reduce:animate-none rounded-3xl bg-card p-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-baseline gap-2">
-          <h2 className="font-heading text-lg font-bold text-foreground">Schedule</h2>
+          <h2 className="font-heading text-lg font-bold text-foreground">{t("schedule")}</h2>
           {sorted.length > 0 && (
             <span className="text-sm text-muted-foreground">
-              {completedCount} of {sorted.length} done
+              {t("doneCount", { completed: completedCount, total: sorted.length })}
             </span>
           )}
         </div>
         <Link
           href={calendarHref}
-          aria-label="View calendar"
+          aria-label={t("viewCalendar")}
           className="rounded-full text-muted-foreground outline-none transition-colors duration-200 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
         >
           <ChevronRight className="size-5" />
@@ -83,7 +85,7 @@ export function SchedulePills({
       </div>
 
       {sorted.length === 0 ? (
-        <p className="mt-4 text-sm text-muted-foreground">No classes today.</p>
+        <p className="mt-4 text-sm text-muted-foreground">{t("noClassesToday")}</p>
       ) : (
         <div className="relative mt-6">
           <div

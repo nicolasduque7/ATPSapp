@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl"
+
 import { CountUpNumber } from "@/components/count-up-number"
 
 interface CircularProgressProps {
@@ -66,6 +68,7 @@ export function ClassesRingStat({
   size = 72,
   strokeWidth = 8,
 }: ClassesRingStatProps) {
+  const t = useTranslations("dashboard")
   const total = completed + remaining
   const numberFontSize = size * 0.32
   const labelFontSize = size * 0.15
@@ -85,7 +88,7 @@ export function ClassesRingStat({
             className="text-muted-foreground leading-tight"
             style={{ fontSize: labelFontSize }}
           >
-            Completed
+            {t("completed")}
           </p>
         </div>
         <div>
@@ -99,7 +102,7 @@ export function ClassesRingStat({
             className="text-muted-foreground leading-tight"
             style={{ fontSize: labelFontSize }}
           >
-            Remaining
+            {t("remaining")}
           </p>
         </div>
       </div>

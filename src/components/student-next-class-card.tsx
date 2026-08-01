@@ -3,10 +3,13 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight } from "lucide-react"
+import { useLocale, useTranslations } from "next-intl"
+import type { Locale } from "date-fns"
 
 import { Avatar } from "@/components/avatar"
 import { Button } from "@/components/ui/button"
 import { formatClubDate, formatClubTime, isSameClubDay } from "@/lib/dates"
+import { getDateFnsLocale } from "@/lib/date-locale"
 import { NextClassCountdown } from "@/components/next-class-countdown"
 import { NotifyDialog } from "@/components/notify-dialog"
 import { StudentClassEditDialog } from "@/components/calendar/student-class-edit-dialog"
@@ -35,14 +38,14 @@ function formatDurationHours(durationMinutes: number): string {
   return `${durationMinutes / 60}h`
 }
 
-function formatDayLabel(date: Date): string {
+function formatDayLabel(date: Date, t: (key: "today" | "tomorrow") => string, dateFnsLocale: Locale): string {
   const now = new Date()
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60_000)
 
-  if (isSameClubDay(date, now)) return "Today"
-  if (isSameClubDay(date, tomorrow)) return "Tomorrow"
+  if (isSameClubDay(date, now)) return t("today")
+  if (isSameClubDay(date, tomorrow)) return t("tomorrow")
 
-  return formatClubDate(date, "EEE, MMM d")
+  return formatClubDate(date, "EEE, MMM d", dateFnsLocale)
 }
 
 export function StudentNextClassCard({
@@ -51,6 +54,9 @@ export function StudentNextClassCard({
   coaches,
   locations,
 }: StudentNextClassCardProps) {
+  const t = useTranslations("dashboard")
+  const appLocale = useLocale()
+  const dateFnsLocale = getDateFnsLocale(appLocale)
   const router = useRouter()
   const [editingEvent, setEditingEvent] = useState<CalendarClassEvent | null>(null)
   const [notifyOpen, setNotifyOpen] = useState(false)
@@ -92,7 +98,7 @@ export function StudentNextClassCard({
 
   return (
     <div className="relative animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300 motion-reduce:animate-none rounded-3xl bg-primary p-6 text-primary-foreground">
-      <p className="text-sm text-primary-foreground/85">Next class</p>
+      <p className="text-sm text-primary-foreground/85">{t("nextClass")}</p>
       {nextClass ? (
         <>
           <span className="absolute top-6 right-6 inline-flex items-center rounded-full bg-primary-foreground/10 px-3 py-1 text-xs font-medium text-primary-foreground">
@@ -101,7 +107,7 @@ export function StudentNextClassCard({
 
           <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 pr-24">
             <p className="font-heading text-2xl font-bold">
-              {formatDayLabel(nextClass.startTime)} · {formatTime(nextClass.startTime)}
+              {formatDayLabel(nextClass.startTime, t, dateFnsLocale)} · {formatTime(nextClass.startTime)}
             </p>
             <p className="text-sm text-primary-foreground/85">
               – {formatTime(nextClass.endTime)} · {formatDurationHours(nextClass.durationMinutes)}
@@ -120,7 +126,7 @@ export function StudentNextClassCard({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Edit class details"
+                    aria-label={t("editClassDetails")}
                     className="text-primary-foreground hover:bg-primary-foreground/15"
                     onClick={handleOpenEdit}
                   >
@@ -139,7 +145,7 @@ export function StudentNextClassCard({
           )}
         </>
       ) : (
-        <p className="mt-2 text-lg font-semibold">Nothing scheduled — enjoy the break.</p>
+        <p className="mt-2 text-lg font-semibold">{t("nothingScheduled")}</p>
       )}
 
       <StudentClassEditDialog

@@ -1,4 +1,5 @@
 import { Bell, CalendarDays, Home } from "lucide-react"
+import { getTranslations } from "next-intl/server"
 
 import { NavItem } from "@/components/nav-item"
 import { MobileNavBar } from "@/components/mobile-nav-bar"
@@ -9,14 +10,19 @@ import { getUnreadNotificationCount } from "@/lib/queries/notifications"
 
 const iconClassName = "size-5 stroke-[1.75]"
 
-const navItems = [
-  { href: "/student", icon: <Home className={iconClassName} />, label: "Home" },
-  { href: "/student/calendar", icon: <CalendarDays className={iconClassName} />, label: "Calendar" },
-  { href: "/student/notifications", icon: <Bell className={iconClassName} />, label: "Notifications" },
-]
-
 export async function StudentSidebar(): Promise<React.JSX.Element> {
-  const [student, unreadCount] = await Promise.all([requireStudent(), getUnreadNotificationCount()])
+  const [student, unreadCount, t] = await Promise.all([
+    requireStudent(),
+    getUnreadNotificationCount(),
+    getTranslations("nav"),
+  ])
+
+  const navItems = [
+    { href: "/student", icon: <Home className={iconClassName} />, label: t("home") },
+    { href: "/student/calendar", icon: <CalendarDays className={iconClassName} />, label: t("calendar") },
+    { href: "/student/notifications", icon: <Bell className={iconClassName} />, label: t("notifications") },
+  ]
+
   const items = navItems.map((item) => ({
     ...item,
     badgeCount: item.href === "/student/notifications" ? unreadCount : undefined,
