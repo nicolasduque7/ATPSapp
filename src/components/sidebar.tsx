@@ -5,6 +5,7 @@ import { NavItem } from "@/components/nav-item"
 import { MobileNavBar } from "@/components/mobile-nav-bar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { AccountMenu } from "@/components/account-menu"
+import { MobileAccountControls } from "@/components/mobile-account-controls"
 import { requireCoach } from "@/lib/auth"
 import { getUnreadNotificationCount } from "@/lib/queries/notifications"
 
@@ -45,10 +46,7 @@ export async function Sidebar(): Promise<React.JSX.Element> {
         </div>
       </aside>
       <MobileNavBar items={items} />
-      <div className="fixed top-4 right-16 z-40 flex translate-y-0 items-center gap-1 rounded-full border border-black/5 bg-sidebar/85 p-1.5 opacity-100 shadow-[0_8px_24px_rgba(0,0,0,0.08)] backdrop-blur-md transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none dark:border-white/10 md:pointer-events-none md:-translate-y-4 md:opacity-0">
-        <ThemeToggle />
-        <AccountMenu name={coach.name} email={coach.email} side="bottom" />
-      </div>
+      <MobileAccountControls name={coach.name} email={coach.email} />
     </>
   )
 }
