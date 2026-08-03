@@ -3,7 +3,6 @@
 import { addDays as addCalendarDays, format } from "date-fns"
 import { useLocale, useTranslations } from "next-intl"
 
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { getDateFnsLocale } from "@/lib/date-locale"
@@ -18,6 +17,7 @@ export function weekdayShortLabel(index: number, t: (key: string) => string): st
 export const FREQUENCIES: SeriesFrequency[] = ["Daily", "Weekly", "Monthly"]
 export const EVERY_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1)
 export const DAY_OF_MONTH_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1)
+export const MAX_JOINER_OPTIONS = Array.from({ length: 8 }, (_, i) => i + 1)
 
 export function buildTimeOptions(): Array<{ value: string; label: string }> {
   const options: Array<{ value: string; label: string }> = []
@@ -269,16 +269,21 @@ export function OpenClassField({
           ]}
         />
         {isOpen && (
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {t("extraSpots")}
-            <Input
-              type="number"
-              min={1}
-              value={maxJoiners}
-              onChange={(e) => onMaxJoinersChange(Math.max(1, Number(e.target.value) || 1))}
-              className="w-16"
-            />
-          </label>
+            <Select value={String(maxJoiners)} onValueChange={(value) => onMaxJoinersChange(Number(value as string))}>
+              <SelectTrigger aria-label={t("extraSpots")} className="h-8 w-16 px-2.5 py-1">
+                <SelectValue>{(value: string) => value}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {MAX_JOINER_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
       </div>
       {isOpen && <span className="text-[0.7rem] text-muted-foreground">{t("openClassCaption")}</span>}
