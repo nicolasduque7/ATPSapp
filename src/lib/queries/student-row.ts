@@ -2,7 +2,7 @@ import { parseDateOnly } from "@/lib/dates";
 import type { Gender, Hand, Student, StudentLevel } from "@/lib/mock-data";
 
 export const STUDENT_COLUMNS =
-  "id, name, nickname, level, age, gender, hand, racket_type, since, coaching_note, email, auth_user_id, forehand_rating, backhand_rating, backhand_slice_rating, volley_rating, serve_rating, drop_shot_rating" as const;
+  "id, name, nickname, level, age, gender, hand, racket_type, since, coaching_note, email, auth_user_id, forehand_rating, backhand_rating, backhand_slice_rating, volley_rating, serve_rating, drop_shot_rating, deactivated_at" as const;
 
 export interface StudentRow {
   id: string;
@@ -23,6 +23,7 @@ export interface StudentRow {
   volley_rating: number;
   serve_rating: number;
   drop_shot_rating: number;
+  deactivated_at: string | null;
 }
 
 export function mapStudentRow(row: StudentRow): Student {
@@ -45,5 +46,6 @@ export function mapStudentRow(row: StudentRow): Student {
     volleyRating: row.volley_rating,
     serveRating: row.serve_rating,
     dropShotRating: row.drop_shot_rating,
+    deactivatedAt: row.deactivated_at ? new Date(row.deactivated_at) : undefined,
   };
 }

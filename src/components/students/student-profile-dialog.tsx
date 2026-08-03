@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react"
 import { format } from "date-fns"
-import { ChevronRight, Trash2 } from "lucide-react"
+import { ChevronRight, RotateCcw, Trash2, UserX } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import {
@@ -51,6 +51,8 @@ interface StudentProfileDialogProps {
   onOpenChange: (open: boolean) => void
   onSave: (input: StudentInput) => Promise<void>
   onDelete: (studentId: string) => Promise<void>
+  onDeactivate: (studentId: string) => Promise<void>
+  onReactivate: (studentId: string) => Promise<void>
   onSaveClassInstance: (classInstance: ClassInstance) => void
   onSaveClassSeries: (seriesId: string, instances: ClassInstance[]) => void
   onDeleteClass: (target: { classId?: string; seriesId?: string }) => void
@@ -80,6 +82,8 @@ export function StudentProfileDialog({
   onOpenChange,
   onSave,
   onDelete,
+  onDeactivate,
+  onReactivate,
   onSaveClassInstance,
   onSaveClassSeries,
   onDeleteClass,
@@ -103,6 +107,8 @@ export function StudentProfileDialog({
             onOpenChange={onOpenChange}
             onSave={onSave}
             onDelete={onDelete}
+            onDeactivate={onDeactivate}
+            onReactivate={onReactivate}
             onSaveClassInstance={onSaveClassInstance}
             onSaveClassSeries={onSaveClassSeries}
             onDeleteClass={onDeleteClass}
@@ -122,6 +128,8 @@ interface StudentProfileFormProps {
   onOpenChange: (open: boolean) => void
   onSave: (input: StudentInput) => Promise<void>
   onDelete: (studentId: string) => Promise<void>
+  onDeactivate: (studentId: string) => Promise<void>
+  onReactivate: (studentId: string) => Promise<void>
   onSaveClassInstance: (classInstance: ClassInstance) => void
   onSaveClassSeries: (seriesId: string, instances: ClassInstance[]) => void
   onDeleteClass: (target: { classId?: string; seriesId?: string }) => void
@@ -136,6 +144,8 @@ function StudentProfileForm({
   onOpenChange,
   onSave,
   onDelete,
+  onDeactivate,
+  onReactivate,
   onSaveClassInstance,
   onSaveClassSeries,
   onDeleteClass,
@@ -167,6 +177,8 @@ function StudentProfileForm({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
+  const [statusChanging, setStatusChanging] = useState(false)
   const [selectedClass, setSelectedClass] = useState<ClassInstance | null>(null)
   const [notifyOpen, setNotifyOpen] = useState(false)
 
@@ -234,6 +246,21 @@ function StudentProfileForm({
       setError(err instanceof Error ? err.message : t("errorGeneric"))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleToggleStatus() {
+    setStatusError(null)
+    setStatusChanging(true)
+    try {
+      if (student.deactivatedAt) {
+        await onReactivate(student.id)
+      } else {
+        await onDeactivate(student.id)
+      }
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : t("errorGeneric"))
+      setStatusChanging(false)
     }
   }
 
@@ -452,6 +479,28 @@ function StudentProfileForm({
               onInviteSent={(email) => onInviteSent(student.id, email)}
             />
           )}
+        </div>
+      )}
+
+      {mode === "edit" && (
+        <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+          {statusError && <p className="text-sm text-destructive">{statusError}</p>}
+          <Button
+            type="button"
+            variant={student.deactivatedAt ? "secondary" : "outline"}
+            className="w-full"
+            onClick={handleToggleStatus}
+            disabled={statusChanging}
+          >
+            {student.deactivatedAt ? <RotateCcw /> : <UserX />}
+            {statusChanging
+              ? student.deactivatedAt
+                ? t("reactivating")
+                : t("deactivating")
+              : student.deactivatedAt
+                ? t("reactivateStudent")
+                : t("deactivateStudent")}
+          </Button>
         </div>
       )}
 

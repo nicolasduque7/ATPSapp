@@ -1,13 +1,21 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Plus } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { LevelBadge } from "@/components/level-badge"
+import { SegmentedToggle } from "@/components/calendar/recurrence-fields"
 import { StudentProfileDialog } from "@/components/students/student-profile-dialog"
-import { createStudent, deleteStudent, updateStudent, type StudentInput } from "@/lib/actions/students"
+import {
+  createStudent,
+  deactivateStudent,
+  deleteStudent,
+  reactivateStudent,
+  updateStudent,
+  type StudentInput,
+} from "@/lib/actions/students"
 import { STUDENT_LEVELS, type ClassInstance, type Location, type Student } from "@/lib/mock-data"
 
 interface StudentsViewProps {
@@ -43,6 +51,13 @@ export function StudentsView({
   const [classes, setClasses] = useState(initialClasses)
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [mode, setMode] = useState<"create" | "edit">("edit")
+  const [statusFilter, setStatusFilter] = useState<"active" | "deactivated">("active")
+
+  const visibleStudents = useMemo(
+    () =>
+      students.filter((student) => (statusFilter === "active" ? !student.deactivatedAt : !!student.deactivatedAt)),
+    [students, statusFilter]
+  )
 
   function handleAddClick() {
     setMode("create")
@@ -72,6 +87,24 @@ export function StudentsView({
     if (!result.ok) throw new Error(result.error)
     setStudents((prev) => prev.filter((student) => student.id !== studentId))
     setClasses((prev) => prev.filter((c) => c.studentId !== studentId))
+    setEditingStudent(null)
+  }
+
+  async function handleDeactivateStudent(studentId: string) {
+    const result = await deactivateStudent(studentId)
+    if (!result.ok) throw new Error(result.error)
+    setStudents((prev) =>
+      prev.map((student) => (student.id === studentId ? { ...student, deactivatedAt: new Date() } : student))
+    )
+    setEditingStudent(null)
+  }
+
+  async function handleReactivateStudent(studentId: string) {
+    const result = await reactivateStudent(studentId)
+    if (!result.ok) throw new Error(result.error)
+    setStudents((prev) =>
+      prev.map((student) => (student.id === studentId ? { ...student, deactivatedAt: undefined } : student))
+    )
     setEditingStudent(null)
   }
 
@@ -113,11 +146,25 @@ export function StudentsView({
         </Button>
       </div>
 
-      {students.length === 0 ? (
-        <div className="rounded-3xl bg-card p-6 text-sm text-muted-foreground">{t("empty")}</div>
+      <div className="w-fit">
+        <SegmentedToggle
+          ariaLabel={t("filterStatus")}
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[
+            { value: "active", label: t("active") },
+            { value: "deactivated", label: t("deactivated") },
+          ]}
+        />
+      </div>
+
+      {visibleStudents.length === 0 ? (
+        <div className="rounded-3xl bg-card p-6 text-sm text-muted-foreground">
+          {statusFilter === "active" ? t("empty") : t("emptyDeactivated")}
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {students.map((student) => (
+          {visibleStudents.map((student) => (
             <button
               key={student.id}
               type="button"
@@ -130,10 +177,19 @@ export function StudentsView({
                 </span>
                 <LevelBadge level={student.level} />
               </div>
-              {student.nickname && (
-                <span className="w-fit rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                  {student.nickname}
-                </span>
+              {(student.nickname || student.deactivatedAt) && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {student.nickname && (
+                    <span className="w-fit rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                      {student.nickname}
+                    </span>
+                  )}
+                  {student.deactivatedAt && (
+                    <span className="w-fit rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                      {t("deactivated")}
+                    </span>
+                  )}
+                </div>
               )}
             </button>
           ))}
@@ -150,6 +206,8 @@ export function StudentsView({
         }}
         onSave={handleSaveStudent}
         onDelete={handleDeleteStudent}
+        onDeactivate={handleDeactivateStudent}
+        onReactivate={handleReactivateStudent}
         onSaveClassInstance={handleSaveClassInstance}
         onSaveClassSeries={handleSaveClassSeries}
         onDeleteClass={handleDeleteClass}

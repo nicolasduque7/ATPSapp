@@ -45,6 +45,31 @@ or book that student. Shared roster, private schedules (below) is the model.
 and write these tables normally — they don't need to know or care who
 originally added a given student or location.
 
+### Deactivating vs. deleting a student or location
+`classes.student_id`/`location_id` and `class_series.student_id`/
+`location_id` are `on delete restrict` — hard-deleting a student or location
+fails with a Postgres `23503` foreign-key-violation whenever **any** class
+references it, past or future, with no date-based exception (`deleteStudent`/
+`deleteLocation` in `src/lib/actions/students.ts` / `locations.ts` just
+surface that error as a friendly message). To retire a student/location
+(e.g. dummy/test data, or someone who stopped training) without clearing
+their entire class history first, both tables have a `deactivated_at
+timestamptz` column instead (`student_location_deactivation` migration).
+Deactivating just sets that column via `deactivateStudent`/
+`deactivateLocation` — no FK involved, always succeeds.
+
+**Front-end connection:** `getStudents()`/`getLocations()` still return
+every row, active or deactivated — filtering happens at the call site.
+`students-view.tsx`/`locations-view.tsx` filter by an Active/Deactivated
+toggle for the roster pages themselves. The booking dialogs
+(`class-edit-dialog.tsx`, `student-class-edit-dialog.tsx`) filter their
+student/location pickers to active-only, **except** they always keep
+whichever student/location the class being edited already references, even
+if deactivated — otherwise editing an old class with a since-deactivated
+student/location would have no way to render its current selection.
+Deactivating is additive, not a replacement for delete: both actions stay
+available side by side.
+
 ### The schedule tables: `classes` and `class_series`
 These stay **private per coach** — a coach only ever sees and manages the
 classes *they* booked. Even though the student and location on a class are

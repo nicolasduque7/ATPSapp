@@ -148,6 +148,13 @@ function StudentClassEditForm({
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  // A deactivated location stays out of the picker for new selections, but
+  // a class already booked there keeps showing it so editing doesn't break.
+  const visibleLocations = useMemo(
+    () => locations.filter((l) => !l.deactivatedAt || l.id === locationId),
+    [locations, locationId]
+  )
+
   const seriesId = event.resource.seriesId ?? null
   const isSeriesInstance = mode === "edit" && !!seriesId
 
@@ -368,7 +375,7 @@ function StudentClassEditForm({
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">{t("location")}</span>
           <div role="radiogroup" aria-label={t("location")} className="flex flex-wrap gap-2">
-            {locations.map((location) => {
+            {visibleLocations.map((location) => {
               const style = getLocationColorStyle(location.id, locations)
               const selected = location.id === locationId
               return (

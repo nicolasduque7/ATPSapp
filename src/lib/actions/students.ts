@@ -137,3 +137,43 @@ export async function deleteStudent(id: string): Promise<ActionResult> {
     return { ok: false, error: e instanceof Error ? e.message : "Couldn't delete student. Try again." };
   }
 }
+
+export async function deactivateStudent(id: string): Promise<ActionResult> {
+  try {
+    await requireCoachId();
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("students").update({ deactivated_at: new Date().toISOString() }).eq("id", id);
+
+    if (error) {
+      console.error("deactivateStudent failed:", error);
+      throw new Error("Couldn't deactivate student. Try again.");
+    }
+
+    revalidatePath("/students");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't deactivate student. Try again." };
+  }
+}
+
+export async function reactivateStudent(id: string): Promise<ActionResult> {
+  try {
+    await requireCoachId();
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("students").update({ deactivated_at: null }).eq("id", id);
+
+    if (error) {
+      console.error("reactivateStudent failed:", error);
+      throw new Error("Couldn't reactivate student. Try again.");
+    }
+
+    revalidatePath("/students");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't reactivate student. Try again." };
+  }
+}

@@ -1,6 +1,6 @@
 import type { CourtSurface, Location } from "@/lib/mock-data";
 
-export const LOCATION_COLUMNS = "id, name, address, surface, hard_courts, clay_courts" as const;
+export const LOCATION_COLUMNS = "id, name, address, surface, hard_courts, clay_courts, deactivated_at" as const;
 
 export interface LocationRow {
   id: string;
@@ -9,6 +9,7 @@ export interface LocationRow {
   surface: CourtSurface;
   hard_courts: number;
   clay_courts: number;
+  deactivated_at: string | null;
 }
 
 export function mapLocationRow(row: LocationRow): Location {
@@ -19,5 +20,6 @@ export function mapLocationRow(row: LocationRow): Location {
     surface: row.surface,
     hardCourts: row.hard_courts,
     clayCourts: row.clay_courts,
+    deactivatedAt: row.deactivated_at ? new Date(row.deactivated_at) : undefined,
   };
 }

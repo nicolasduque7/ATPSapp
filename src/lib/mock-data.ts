@@ -20,6 +20,7 @@ export interface Location {
   surface: CourtSurface
   hardCourts: number
   clayCourts: number
+  deactivatedAt?: Date
 }
 
 export interface Student {
@@ -41,6 +42,7 @@ export interface Student {
   volleyRating: number
   serveRating: number
   dropShotRating: number
+  deactivatedAt?: Date
 }
 
 export interface ClassInstance {

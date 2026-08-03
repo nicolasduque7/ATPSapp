@@ -180,7 +180,17 @@
     "keepLocation": "Conservar ubicación",
     "confirmDelete": "Confirmar eliminación",
     "deleting": "Eliminando…",
-    "deleteLocation": "Eliminar ubicación"
+    "deleteLocation": "Eliminar ubicación",
+    "active": "Activas",
+    "deactivated": "Desactivadas",
+    "filterStatus": "Filtro de estado",
+    "emptyDeactivated": "No hay ubicaciones desactivadas.",
+    "deactivateLocation": "Desactivar ubicación",
+    "reactivateLocation": "Reactivar ubicación",
+    "deactivating": "Desactivando…",
+    "reactivating": "Reactivando…",
+    "errorDeactivateGeneric": "No se pudo desactivar la ubicación. Inténtalo de nuevo.",
+    "errorReactivateGeneric": "No se pudo reactivar la ubicación. Inténtalo de nuevo."
   },
   "students": {
     "title": "Estudiantes",
@@ -230,7 +240,17 @@
     "deleting": "Eliminando…",
     "deleteStudent": "Eliminar estudiante",
     "upcomingClasses": "Próximas clases",
-    "noUpcomingClasses": "No hay próximas clases."
+    "noUpcomingClasses": "No hay próximas clases.",
+    "active": "Activos",
+    "deactivated": "Desactivados",
+    "filterStatus": "Filtro de estado",
+    "emptyDeactivated": "No hay estudiantes desactivados.",
+    "deactivateStudent": "Desactivar estudiante",
+    "reactivateStudent": "Reactivar estudiante",
+    "deactivating": "Desactivando…",
+    "reactivating": "Reactivando…",
+    "errorDeactivateGeneric": "No se pudo desactivar el estudiante. Inténtalo de nuevo.",
+    "errorReactivateGeneric": "No se pudo reactivar el estudiante. Inténtalo de nuevo."
   },
   "notifications": {
     "title": "Notificaciones",

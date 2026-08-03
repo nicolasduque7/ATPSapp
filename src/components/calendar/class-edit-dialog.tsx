@@ -177,6 +177,18 @@ function ClassEditForm({
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  // Deactivated students/locations stay out of the pickers for new
+  // selections, but a class already booked against one keeps showing it so
+  // editing that class doesn't break.
+  const visibleStudents = useMemo(
+    () => students.filter((s) => !s.deactivatedAt || s.id === studentId),
+    [students, studentId]
+  )
+  const visibleLocations = useMemo(
+    () => locations.filter((l) => !l.deactivatedAt || l.id === locationId),
+    [locations, locationId]
+  )
+
   const seriesId = event.resource.seriesId ?? null
   const isSeriesInstance = mode === "edit" && !!seriesId
 
@@ -385,7 +397,7 @@ function ClassEditForm({
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {students.map((s) => (
+              {visibleStudents.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.name} · {s.level}
                 </SelectItem>
@@ -397,7 +409,7 @@ function ClassEditForm({
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">{t("location")}</span>
           <div role="radiogroup" aria-label={t("location")} className="flex flex-wrap gap-2">
-            {locations.map((location) => {
+            {visibleLocations.map((location) => {
               const style = getLocationColorStyle(location.id, locations)
               const selected = location.id === locationId
               return (

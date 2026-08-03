@@ -180,7 +180,17 @@
     "keepLocation": "Keep location",
     "confirmDelete": "Confirm delete",
     "deleting": "Deleting…",
-    "deleteLocation": "Delete location"
+    "deleteLocation": "Delete location",
+    "active": "Active",
+    "deactivated": "Deactivated",
+    "filterStatus": "Status filter",
+    "emptyDeactivated": "No deactivated locations.",
+    "deactivateLocation": "Deactivate location",
+    "reactivateLocation": "Reactivate location",
+    "deactivating": "Deactivating…",
+    "reactivating": "Reactivating…",
+    "errorDeactivateGeneric": "Couldn't deactivate location. Try again.",
+    "errorReactivateGeneric": "Couldn't reactivate location. Try again."
   },
   "students": {
     "title": "Students",
@@ -230,7 +240,17 @@
     "deleting": "Deleting…",
     "deleteStudent": "Delete student",
     "upcomingClasses": "Upcoming classes",
-    "noUpcomingClasses": "No upcoming classes."
+    "noUpcomingClasses": "No upcoming classes.",
+    "active": "Active",
+    "deactivated": "Deactivated",
+    "filterStatus": "Status filter",
+    "emptyDeactivated": "No deactivated students.",
+    "deactivateStudent": "Deactivate student",
+    "reactivateStudent": "Reactivate student",
+    "deactivating": "Deactivating…",
+    "reactivating": "Reactivating…",
+    "errorDeactivateGeneric": "Couldn't deactivate student. Try again.",
+    "errorReactivateGeneric": "Couldn't reactivate student. Try again."
   },
   "notifications": {
     "title": "Notifications",

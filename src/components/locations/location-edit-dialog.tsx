@@ -1,7 +1,7 @@
 "use client"
 
 import { useId, useState } from "react"
-import { Trash2 } from "lucide-react"
+import { RotateCcw, Trash2, XCircle } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import {
@@ -24,6 +24,8 @@ interface LocationEditDialogProps {
   onOpenChange: (open: boolean) => void
   onSave: (input: LocationInput) => Promise<void>
   onDelete: (locationId: string) => Promise<void>
+  onDeactivate: (locationId: string) => Promise<void>
+  onReactivate: (locationId: string) => Promise<void>
 }
 
 const SURFACE_OPTIONS: CourtSurface[] = ["Hard", "Clay", "Both"]
@@ -34,6 +36,8 @@ export function LocationEditDialog({
   onOpenChange,
   onSave,
   onDelete,
+  onDeactivate,
+  onReactivate,
 }: LocationEditDialogProps) {
   const t = useTranslations("locations")
   return (
@@ -51,6 +55,8 @@ export function LocationEditDialog({
             onOpenChange={onOpenChange}
             onSave={onSave}
             onDelete={onDelete}
+            onDeactivate={onDeactivate}
+            onReactivate={onReactivate}
           />
         )}
       </DialogContent>
@@ -64,9 +70,19 @@ interface LocationEditFormProps {
   onOpenChange: (open: boolean) => void
   onSave: (input: LocationInput) => Promise<void>
   onDelete: (locationId: string) => Promise<void>
+  onDeactivate: (locationId: string) => Promise<void>
+  onReactivate: (locationId: string) => Promise<void>
 }
 
-function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: LocationEditFormProps) {
+function LocationEditForm({
+  location,
+  mode,
+  onOpenChange,
+  onSave,
+  onDelete,
+  onDeactivate,
+  onReactivate,
+}: LocationEditFormProps) {
   const t = useTranslations("locations")
   const ts = useTranslations("enums.courtSurface")
   const formId = useId()
@@ -80,6 +96,8 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
+  const [statusChanging, setStatusChanging] = useState(false)
 
   async function handleSubmit(formEvent: React.FormEvent) {
     formEvent.preventDefault()
@@ -104,6 +122,21 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
       setError(err instanceof Error ? err.message : t("errorGeneric"))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleToggleStatus() {
+    setStatusError(null)
+    setStatusChanging(true)
+    try {
+      if (location.deactivatedAt) {
+        await onReactivate(location.id)
+      } else {
+        await onDeactivate(location.id)
+      }
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : t("errorGeneric"))
+      setStatusChanging(false)
     }
   }
 
@@ -223,6 +256,28 @@ function LocationEditForm({ location, mode, onOpenChange, onSave, onDelete }: Lo
           {saving ? t("saving") : t("save")}
         </Button>
       </DialogFooter>
+
+      {mode === "edit" && (
+        <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+          {statusError && <p className="text-sm text-destructive">{statusError}</p>}
+          <Button
+            type="button"
+            variant={location.deactivatedAt ? "secondary" : "outline"}
+            className="w-full"
+            onClick={handleToggleStatus}
+            disabled={statusChanging}
+          >
+            {location.deactivatedAt ? <RotateCcw /> : <XCircle />}
+            {statusChanging
+              ? location.deactivatedAt
+                ? t("reactivating")
+                : t("deactivating")
+              : location.deactivatedAt
+                ? t("reactivateLocation")
+                : t("deactivateLocation")}
+          </Button>
+        </div>
+      )}
 
       {mode === "edit" && (
         <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">

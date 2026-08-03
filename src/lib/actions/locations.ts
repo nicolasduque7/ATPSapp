@@ -107,3 +107,43 @@ export async function deleteLocation(id: string): Promise<ActionResult> {
     return { ok: false, error: e instanceof Error ? e.message : "Couldn't delete location. Try again." };
   }
 }
+
+export async function deactivateLocation(id: string): Promise<ActionResult> {
+  try {
+    await requireCoachId();
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("locations").update({ deactivated_at: new Date().toISOString() }).eq("id", id);
+
+    if (error) {
+      console.error("deactivateLocation failed:", error);
+      throw new Error("Couldn't deactivate location. Try again.");
+    }
+
+    revalidatePath("/locations");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't deactivate location. Try again." };
+  }
+}
+
+export async function reactivateLocation(id: string): Promise<ActionResult> {
+  try {
+    await requireCoachId();
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("locations").update({ deactivated_at: null }).eq("id", id);
+
+    if (error) {
+      console.error("reactivateLocation failed:", error);
+      throw new Error("Couldn't reactivate location. Try again.");
+    }
+
+    revalidatePath("/locations");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    unstable_rethrow(e);
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't reactivate location. Try again." };
+  }
+}
