@@ -46,6 +46,7 @@ import {
 interface StudentProfileDialogProps {
   student: Student | null
   mode: "create" | "edit"
+  currentCoachId: string
   classes: ClassInstance[]
   locations: Location[]
   onOpenChange: (open: boolean) => void
@@ -77,6 +78,7 @@ function formatDuration(minutes: number): string {
 export function StudentProfileDialog({
   student,
   mode,
+  currentCoachId,
   classes,
   locations,
   onOpenChange,
@@ -102,6 +104,7 @@ export function StudentProfileDialog({
             key={student.id}
             student={student}
             mode={mode}
+            currentCoachId={currentCoachId}
             classes={classes}
             locations={locations}
             onOpenChange={onOpenChange}
@@ -123,6 +126,7 @@ export function StudentProfileDialog({
 interface StudentProfileFormProps {
   student: Student
   mode: "create" | "edit"
+  currentCoachId: string
   classes: ClassInstance[]
   locations: Location[]
   onOpenChange: (open: boolean) => void
@@ -139,6 +143,7 @@ interface StudentProfileFormProps {
 function StudentProfileForm({
   student,
   mode,
+  currentCoachId,
   classes,
   locations,
   onOpenChange,
@@ -601,6 +606,7 @@ function StudentProfileForm({
       <ClassEditDialog
         event={selectedEvent}
         mode="edit"
+        currentCoachId={currentCoachId}
         students={[student]}
         locations={locations}
         onOpenChange={(open) => {

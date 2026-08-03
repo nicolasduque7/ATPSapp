@@ -110,14 +110,20 @@ async function getOrCreateTestCoach(): Promise<string> {
 
 async function wipeCoachClasses(coachId: string): Promise<void> {
   // Only this coach's classes/series — students and locations are shared
-  // club-wide and are never inserted or wiped by this script.
+  // club-wide and are never inserted or wiped by this script. Working-hours
+  // rows ARE this coach's own, though, and are wiped/re-seeded below for the
+  // same reason seed.ts does: without them every class booked here would
+  // itself violate the working-hours enforcement now in place.
   await supabase.from("classes").delete().eq("coach_id", coachId);
   await supabase.from("class_series").delete().eq("coach_id", coachId);
+  await supabase.from("coach_availability_series").delete().eq("coach_id", coachId);
+  await supabase.from("coach_availability_blocks").delete().eq("coach_id", coachId);
 }
 
 async function loadSharedLookups(): Promise<{
   locationId: (name: string) => string;
   studentId: (name: string) => string;
+  allLocationIds: string[];
 }> {
   const { data: locations, error: locationsError } = await supabase
     .from("locations")
@@ -148,10 +154,12 @@ async function loadSharedLookups(): Promise<{
     return match.id as string;
   };
 
-  return { locationId, studentId };
+  return { locationId, studentId, allLocationIds: locations.map((l) => l.id as string) };
 }
 
 async function seed(): Promise<void> {
+  const now = new Date();
+
   console.log(`Looking up or creating test coach #2 (${TEST_COACH_EMAIL})...`);
   const coachId = await getOrCreateTestCoach();
 
@@ -159,10 +167,48 @@ async function seed(): Promise<void> {
   await wipeCoachClasses(coachId);
 
   console.log("Looking up shared students/locations (seeded by coach #1)...");
-  const { locationId, studentId } = await loadSharedLookups();
+  const { locationId, studentId, allLocationIds } = await loadSharedLookups();
+
+  // Declares this coach as working 07:00-20:00 every day at all shared
+  // locations, comfortably covering every class booked below (earliest:
+  // dayOffset -4 at 10:00; latest: the monthly series' +135-day window) —
+  // required now that bookings are validated against declared working
+  // hours (see BACKEND.md section 7).
+  console.log("Declaring working hours (07:00-20:00 daily, all locations)...");
+  {
+    const startDate = addDays(now, -60);
+    const endDate = addDays(now, 140);
+    const pattern: RecurrencePattern = { frequency: "Daily", intervalCount: 1 };
+    const { data: availabilitySeries, error: availabilitySeriesError } = await supabase
+      .from("coach_availability_series")
+      .insert({
+        coach_id: coachId,
+        frequency: pattern.frequency,
+        interval_count: pattern.intervalCount,
+        location_ids: allLocationIds,
+        start_time: "07:00:00",
+        end_time: "20:00:00",
+        start_date: localDate(startDate),
+        end_date: localDate(endDate),
+      })
+      .select("id")
+      .single();
+    if (availabilitySeriesError) throw availabilitySeriesError;
+
+    const availabilityBlockRows = generateOccurrences(pattern, startDate, endDate).map((day) => ({
+      coach_id: coachId,
+      series_id: availabilitySeries.id,
+      location_ids: allLocationIds,
+      start_time: localTimestamp(at(day, 0, 7, 0)),
+      end_time: localTimestamp(at(day, 0, 20, 0)),
+    }));
+    const { error: availabilityBlocksError } = await supabase
+      .from("coach_availability_blocks")
+      .insert(availabilityBlockRows);
+    if (availabilityBlocksError) throw availabilityBlocksError;
+  }
 
   console.log("Inserting one-off classes...");
-  const now = new Date();
   interface OneOffSeed {
     dayOffset: number;
     hour: number;

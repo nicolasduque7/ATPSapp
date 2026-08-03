@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useId, useMemo, useState } from "react"
-import { differenceInCalendarDays, startOfDay } from "date-fns"
+import { differenceInCalendarDays, format, startOfDay } from "date-fns"
 import { Trash2 } from "lucide-react"
 import { useLocale, useTranslations } from "next-intl"
 
@@ -16,18 +16,23 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { getLocationColorStyle } from "@/lib/location-colors"
+import { getDateFnsLocale } from "@/lib/date-locale"
 import {
   addDays,
   addMinutes,
   combineClubDateAndTime,
   combineDateAndTime,
   formatDateOnly,
+  generateOccurrences,
   parseDateOnly,
   toClubZoned,
   zonedNow,
+  type RecurrencePattern,
   type SeriesFrequency,
 } from "@/lib/dates"
 import { getStudentClassSeriesMeta } from "@/lib/actions/student-classes"
+import { checkSeriesConflictsPreview, type SeriesConflictPreview } from "@/lib/actions/availability-suggestions"
+import { AvailableSlotsPanel } from "@/components/calendar/available-slots-panel"
 import type { ClassType, Coach, Location } from "@/lib/mock-data"
 import type { CalendarClassEvent, StudentClassFormSubmission } from "@/components/calendar/types"
 import {
@@ -124,6 +129,7 @@ function StudentClassEditForm({
   onDelete,
 }: StudentClassEditFormProps) {
   const t = useTranslations("classForm")
+  const ta = useTranslations("availableSlots")
   const te = useTranslations("enums.classType")
   const tf = useTranslations("enums.frequency")
   const tr = useTranslations("recurrence")
@@ -219,6 +225,69 @@ function StudentClassEditForm({
       cancelled = true
     }
   }, [mode, isSeriesInstance, editScope, seriesId, seriesMetaLoaded, today, t])
+
+  // Whole-series conflict dry-run preview (create mode only) — advisory,
+  // does not change how the actual submit/creation validates. Reuses the
+  // same validity conditions handleSubmit checks before generateOccurrences.
+  const recurringPatternValid =
+    recurringEndTime > recurringStartTime &&
+    recurringUntilOffset >= recurringStartOffset &&
+    (frequency !== "Weekly" || recurringWeekdays.length > 0)
+
+  const [seriesPreview, setSeriesPreview] = useState<SeriesConflictPreview | null>(null)
+  const [seriesPreviewLoading, setSeriesPreviewLoading] = useState(false)
+  const [seriesPreviewError, setSeriesPreviewError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (mode !== "create" || !usingRecurringFields || !coachId || !recurringPatternValid) {
+      return
+    }
+    let cancelled = false
+    const handle = setTimeout(() => {
+      setSeriesPreviewLoading(true)
+      setSeriesPreviewError(null)
+      const pattern: RecurrencePattern = {
+        frequency,
+        intervalCount,
+        weekdays: frequency === "Weekly" ? recurringWeekdays : null,
+        dayOfMonth: frequency === "Monthly" ? dayOfMonth : null,
+      }
+      const occurrences = generateOccurrences(
+        pattern,
+        addDays(today, recurringStartOffset),
+        addDays(today, recurringUntilOffset)
+      )
+      const durationMinutes = durationBetween(recurringStartTime, recurringEndTime, today)
+      checkSeriesConflictsPreview(coachId, occurrences, recurringStartTime, durationMinutes).then((result) => {
+        if (cancelled) return
+        setSeriesPreviewLoading(false)
+        if (!result.ok) {
+          setSeriesPreviewError(result.error)
+          setSeriesPreview(null)
+          return
+        }
+        setSeriesPreview(result.data)
+      })
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [
+    mode,
+    usingRecurringFields,
+    coachId,
+    recurringPatternValid,
+    frequency,
+    intervalCount,
+    recurringWeekdays,
+    dayOfMonth,
+    recurringStartOffset,
+    recurringUntilOffset,
+    recurringStartTime,
+    recurringEndTime,
+    today,
+  ])
 
   const dateOptions = useMemo(
     () => buildOffsetRange(-DATE_RANGE_BEFORE, DATE_RANGE_AFTER, initialDateOffset),
@@ -453,6 +522,33 @@ function StudentClassEditForm({
           </div>
         )}
 
+        {!(mode === "edit" && seriesMetaLoading) && (
+          <AvailableSlotsPanel
+            coachId={coachId}
+            locationId={locationId}
+            anchorDateOffset={usingRecurringFields ? recurringStartOffset : dateOffset}
+            durationMinutes={
+              usingRecurringFields
+                ? durationBetween(recurringStartTime, recurringEndTime, today)
+                : durationBetween(singleStartTime, singleEndTime, today)
+            }
+            today={today}
+            excludeClassId={mode === "edit" && !usingRecurringFields ? event.id : undefined}
+            excludeSeriesId={mode === "edit" && usingRecurringFields ? (seriesId ?? undefined) : undefined}
+            onPickSlot={({ dateOffset: pickedOffset, startTime, endTime }) => {
+              if (usingRecurringFields) {
+                setRecurringStartOffset(pickedOffset)
+                setRecurringStartTime(startTime)
+                setRecurringEndTime(endTime)
+              } else {
+                setDateOffset(pickedOffset)
+                setSingleStartTime(startTime)
+                setSingleEndTime(endTime)
+              }
+            }}
+          />
+        )}
+
         {!usingRecurringFields && (
           <>
             <DateOffsetField
@@ -638,6 +734,32 @@ function StudentClassEditForm({
               options={seriesRangeOptions}
               today={today}
             />
+
+            {mode === "create" && recurringPatternValid && (
+              <div className="text-sm">
+                {seriesPreviewLoading && <p className="text-muted-foreground">{ta("checkingSessions")}</p>}
+                {!seriesPreviewLoading && seriesPreviewError && (
+                  <p className="text-destructive">{seriesPreviewError}</p>
+                )}
+                {!seriesPreviewLoading && !seriesPreviewError && seriesPreview && (
+                  <p className="text-muted-foreground">
+                    {seriesPreview.conflictDates.length === 0
+                      ? ta("seriesAllClear", { count: seriesPreview.total })
+                      : ta("seriesSomeConflicts", {
+                          conflictCount: seriesPreview.conflictDates.length,
+                          total: seriesPreview.total,
+                          dates: seriesPreview.conflictDates
+                            .slice(0, 4)
+                            .map((d) => format(parseDateOnly(d), "MMM d", { locale: getDateFnsLocale(locale) }))
+                            .join(", ") +
+                            (seriesPreview.conflictDates.length > 4
+                              ? ` +${seriesPreview.conflictDates.length - 4}`
+                              : ""),
+                        })}
+                  </p>
+                )}
+              </div>
+            )}
           </>
         )}
 

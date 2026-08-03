@@ -12,11 +12,12 @@ import type { CalendarClassEvent, ClassFormSubmission } from "@/components/calen
 import type { Location, Student } from "@/lib/mock-data"
 
 interface AddClassButtonProps {
+  coachId: string
   students: Student[]
   locations: Location[]
 }
 
-export function AddClassButton({ students, locations }: AddClassButtonProps) {
+export function AddClassButton({ coachId, students, locations }: AddClassButtonProps) {
   const t = useTranslations("home")
   const router = useRouter()
   const [creatingEvent, setCreatingEvent] = useState<CalendarClassEvent | null>(null)
@@ -47,6 +48,7 @@ export function AddClassButton({ students, locations }: AddClassButtonProps) {
       <ClassEditDialog
         event={creatingEvent}
         mode="create"
+        currentCoachId={coachId}
         students={students}
         locations={locations}
         onOpenChange={(open) => {

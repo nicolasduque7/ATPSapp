@@ -19,6 +19,7 @@ import {
 import { STUDENT_LEVELS, type ClassInstance, type Location, type Student } from "@/lib/mock-data"
 
 interface StudentsViewProps {
+  coachId: string
   students: Student[]
   classes: ClassInstance[]
   locations: Location[]
@@ -42,6 +43,7 @@ const DRAFT_STUDENT: Student = {
 }
 
 export function StudentsView({
+  coachId,
   students: initialStudents,
   classes: initialClasses,
   locations,
@@ -199,6 +201,7 @@ export function StudentsView({
       <StudentProfileDialog
         student={editingStudent}
         mode={mode}
+        currentCoachId={coachId}
         classes={classes}
         locations={locations}
         onOpenChange={(open) => {

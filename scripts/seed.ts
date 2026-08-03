@@ -117,9 +117,15 @@ async function getOrCreateTestCoach(): Promise<string> {
 // silently succeeding here. Re-creating them from scratch every run isn't
 // even correct anymore now that they're shared: coach #2 depends on these
 // exact rows persisting. `upsertByName` below reuses them instead.
+//
+// Working-hours rows are wiped and re-seeded too (not shared, coach-owned):
+// without them, every class this script books would itself violate the
+// working-hours enforcement now in place the moment it ships.
 async function wipeCoachData(coachId: string): Promise<void> {
   await supabase.from("classes").delete().eq("coach_id", coachId);
   await supabase.from("class_series").delete().eq("coach_id", coachId);
+  await supabase.from("coach_availability_series").delete().eq("coach_id", coachId);
+  await supabase.from("coach_availability_blocks").delete().eq("coach_id", coachId);
 }
 
 // Reuses an existing shared row by name if one exists, otherwise inserts it.
@@ -181,6 +187,8 @@ const STUDENTS: StudentSeed[] = [
 ];
 
 async function seed(): Promise<void> {
+  const now = new Date();
+
   console.log(`Looking up or creating test coach (${TEST_COACH_EMAIL})...`);
   const coachId = await getOrCreateTestCoach();
 
@@ -206,6 +214,45 @@ async function seed(): Promise<void> {
     return id;
   };
 
+  // Declares this coach as working 07:00-20:00 every day at all 3 shared
+  // locations, comfortably covering every class this script books below
+  // (earliest: dayOffset -3 at 09:00; latest: the monthly series' +120-day
+  // window) — required now that bookings are validated against declared
+  // working hours (see BACKEND.md section 7).
+  console.log("Declaring working hours (07:00-20:00 daily, all locations)...");
+  {
+    const startDate = addDays(now, -30);
+    const endDate = addDays(now, 130);
+    const pattern: RecurrencePattern = { frequency: "Daily", intervalCount: 1 };
+    const { data: availabilitySeries, error: availabilitySeriesError } = await supabase
+      .from("coach_availability_series")
+      .insert({
+        coach_id: coachId,
+        frequency: pattern.frequency,
+        interval_count: pattern.intervalCount,
+        location_ids: Array.from(locationIds.values()),
+        start_time: "07:00:00",
+        end_time: "20:00:00",
+        start_date: localDate(startDate),
+        end_date: localDate(endDate),
+      })
+      .select("id")
+      .single();
+    if (availabilitySeriesError) throw availabilitySeriesError;
+
+    const availabilityBlockRows = generateOccurrences(pattern, startDate, endDate).map((day) => ({
+      coach_id: coachId,
+      series_id: availabilitySeries.id,
+      location_ids: Array.from(locationIds.values()),
+      start_time: localTimestamp(at(day, 0, 7, 0)),
+      end_time: localTimestamp(at(day, 0, 20, 0)),
+    }));
+    const { error: availabilityBlocksError } = await supabase
+      .from("coach_availability_blocks")
+      .insert(availabilityBlockRows);
+    if (availabilityBlocksError) throw availabilityBlocksError;
+  }
+
   console.log("Looking up or creating students (shared club-wide)...");
   const studentIds = new Map<string, string>();
   for (const s of STUDENTS) {
@@ -230,7 +277,6 @@ async function seed(): Promise<void> {
   };
 
   console.log("Inserting one-off classes...");
-  const now = new Date();
   interface OneOffSeed {
     dayOffset: number;
     hour: number;

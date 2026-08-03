@@ -241,3 +241,93 @@ export function generateOccurrences(pattern: RecurrencePattern, from: Date, unti
       return generateMonthlyOccurrences(from, until, pattern.dayOfMonth ?? 1, pattern.intervalCount)
   }
 }
+
+// --- Available-slot suggestions (student booking form) ---------------------
+//
+// A coach can declare multiple, possibly-overlapping working-hours blocks
+// for the same day (coach_availability_series/coach_availability_blocks
+// deliberately allow overlaps, e.g. a one-off adjustment layered over a
+// standing block — see BACKEND.md section 7), so free-time math first has
+// to normalize `windows` before subtracting `busy` bookings from it.
+
+export interface TimeWindow {
+  start: Date
+  end: Date
+}
+
+export function mergeWindows(windows: TimeWindow[]): TimeWindow[] {
+  if (windows.length === 0) return []
+  const sorted = [...windows].sort((a, b) => a.start.getTime() - b.start.getTime())
+  const merged: TimeWindow[] = [{ ...sorted[0] }]
+  for (const window of sorted.slice(1)) {
+    const last = merged[merged.length - 1]
+    if (window.start.getTime() <= last.end.getTime()) {
+      if (window.end.getTime() > last.end.getTime()) last.end = window.end
+    } else {
+      merged.push({ ...window })
+    }
+  }
+  return merged
+}
+
+// `windows` minus every overlapping `busy` interval, e.g. a coach's declared
+// working hours minus their existing bookings for the same day. `windows`
+// need not be pre-merged or non-overlapping; `busy` need not be sorted.
+export function subtractBusyIntervals(windows: TimeWindow[], busy: TimeWindow[]): TimeWindow[] {
+  const merged = mergeWindows(windows)
+  if (busy.length === 0) return merged
+  const sortedBusy = [...busy].sort((a, b) => a.start.getTime() - b.start.getTime())
+
+  const result: TimeWindow[] = []
+  for (const window of merged) {
+    let cursor = window.start
+    for (const interval of sortedBusy) {
+      if (interval.end.getTime() <= cursor.getTime() || interval.start.getTime() >= window.end.getTime()) {
+        continue
+      }
+      if (interval.start.getTime() > cursor.getTime()) {
+        result.push({ start: cursor, end: interval.start })
+      }
+      if (interval.end.getTime() > cursor.getTime()) {
+        cursor = interval.end
+      }
+      if (cursor.getTime() >= window.end.getTime()) break
+    }
+    if (cursor.getTime() < window.end.getTime()) {
+      result.push({ start: cursor, end: window.end })
+    }
+  }
+  return result
+}
+
+// True iff `candidate` is fully contained within the union of `windows`
+// (after merging possibly-overlapping ones). Shared by the suggestion
+// panel's own free-window computation and server-side working-hours
+// enforcement (src/lib/actions/class-shared.ts's assertWithinWorkingHours),
+// so a slot the panel suggests can never be rejected at submit, and a slot
+// it doesn't suggest can never be accepted.
+export function isFullyWithinWindows(candidate: TimeWindow, windows: TimeWindow[]): boolean {
+  const merged = mergeWindows(windows)
+  return merged.some(
+    (w) => w.start.getTime() <= candidate.start.getTime() && w.end.getTime() >= candidate.end.getTime()
+  )
+}
+
+// Breaks each free window into fixed-size candidate start times,
+// `incrementMinutes` apart, keeping only starts whose full `durationMinutes`
+// fits inside the window they came from.
+export function bucketFreeWindows(
+  windows: TimeWindow[],
+  durationMinutes: number,
+  incrementMinutes: number,
+): TimeWindow[] {
+  const slots: TimeWindow[] = []
+  for (const window of windows) {
+    let start = window.start
+    while (addMinutes(start, durationMinutes).getTime() <= window.end.getTime()) {
+      slots.push({ start, end: addMinutes(start, durationMinutes) })
+      start = addMinutes(start, incrementMinutes)
+    }
+  }
+  return slots
+}

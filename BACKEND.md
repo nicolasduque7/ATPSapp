@@ -330,11 +330,20 @@ checklists, and color-coding (`src/lib/coach-colors.ts`) all live here.
 ## 7. Coach working hours (`coach_availability_series` / `coach_availability_blocks`)
 
 A coach can declare when — and at which locations — they're generally
-available to teach, from a new Settings page. This is purely descriptive:
-there's no validation tying a class booking to a coach's declared hours, and
-no exclusion constraint preventing a coach's own working-hours entries from
-overlapping each other (e.g. a one-off adjustment layered over a standing
-recurring block is valid, not an error).
+available to teach, from a new Settings page.
+
+**As of the working-hours enforcement change (see section 15), this is no
+longer purely descriptive: a class booking's exact time must fall fully
+within the coach's declared hours at that location, checked identically to
+how the suggestion panel computes free slots (`isFullyWithinWindows` in
+`src/lib/dates.ts`), so the two can never disagree — a slot the panel
+suggests is always accepted, and a slot it doesn't suggest is always
+rejected.** Enforcement is unconditional, with no carve-out for a coach with
+no (or incomplete) declared hours — verified safe against production data
+before shipping (all real coaches already had hours declared). There is
+still no exclusion constraint preventing a coach's own working-hours entries
+from overlapping each other (e.g. a one-off adjustment layered over a
+standing recurring block is valid, not an error) — that part is unchanged.
 
 **Structurally this is a direct mirror of `class_series`/`classes`:**
 `coach_availability_series` holds the recurrence rule (Daily/Weekly/Monthly,
@@ -695,10 +704,110 @@ purpose there.
 
 ---
 
+## 15. Available time-slot suggestions & recurring dry-run preview
+
+The student booking form only ever prevented conflicts *reactively* — a
+student could pick any coach/location/time and only find out about a
+double-booking after hitting Save. Coach working hours
+(`coach_availability_series`/`coach_availability_blocks`, section 7) already
+existed but were never consulted during booking at all, purely a visual
+overlay. This section adds a proactive suggestion panel on the booking form:
+once a student picks a coach + location, it shows that coach's actual open
+time slots for the selected day (working hours minus existing bookings),
+with a day-button bar to browse the next 14 days if the selected day has
+nothing open.
+
+**Why two new SECURITY DEFINER functions were needed:** a student can
+already read a coach's *declared* working-hours blocks directly (existing
+`coach_availability_blocks_select_student` policy, section 9) — but cannot
+read another coach's or student's `classes` rows to know which of those
+hours are already *booked* (RLS scopes `classes` reads to the caller's own
+bookings or open classes). This is the exact same wall `check_coach_conflict`
+(section 2) exists to get around, so two narrow, read-only RPCs were added
+alongside it:
+
+- **`get_coach_busy_intervals(p_coach_id, p_from, p_to)`** — every booked
+  interval for a coach in a date range. Deliberately returns only start/end
+  times, no student name — narrower than `check_coach_conflict`, since this
+  call's only job is "is the coach busy," not "who with."
+- **`check_series_conflicts_bulk(p_student_id, p_coach_id, p_starts,
+  p_ends)`** — bulk conflict check across an entire array of candidate
+  occurrences in one round trip, instead of looping
+  `check_student_conflict`/`check_coach_conflict` once per date from the
+  client (fine as a one-time cost at submit time; too slow to re-run
+  reactively while a student is still tuning a recurring pattern).
+
+Free-window math (working hours minus busy intervals, then bucketed into
+fixed-size candidate start times) is deliberately done in **TypeScript**
+(`subtractBusyIntervals`/`bucketFreeWindows` in `src/lib/dates.ts`), not SQL
+— both raw reads it combines are already individually authorized (one via
+existing student RLS, one via the new RPC above), and interval subtraction
+is simpler to write and unit-test as plain `Date` logic than as a SQL
+recursive CTE.
+
+**Recurring series — "preview only, no change to submit."** A series applies
+one fixed time-of-day across every generated occurrence, so a suggested slot
+is only computed off the series' anchor/start date (same code path as a
+one-off booking). Separately, once a full recurrence pattern + tentative
+time are set, `check_series_conflicts_bulk` runs a dry-run across every
+occurrence `generateOccurrences()` would produce, showing a summary like
+"available for all 8 sessions" or "conflicts on 2 of 8 dates." This is
+advisory only: `createStudentClassSeries` is completely unchanged — it still
+runs its own sequential per-occurrence check and aborts the whole series on
+the first real conflict at submit time, exactly as before.
+
+**Working hours are now enforced (update — see section 7 for the full
+change).** What was originally written here as "coach working hours remain
+purely descriptive, never a hard constraint" is no longer true: a booking's
+exact time is now validated against declared hours at submit time, via a new
+`assertWithinWorkingHours` helper in `src/lib/actions/class-shared.ts`
+(mirroring `assertNoStudentConflict`/`assertNoCoachConflict`'s exact
+call-site pattern — same loop-before-insert position, same all-or-nothing
+series behavior) using a plain authenticated query against
+`coach_availability_blocks` (no new RPC needed for this specific check — RLS
+already grants both coaches and students direct read access to that table).
+The suggestion panel and the enforcement check share the same containment
+logic (`isFullyWithinWindows`), so they can never disagree.
+
+**Self-exclusion for edit mode.** The panel is now wired into both the
+student's and the coach's booking dialogs, in both create and edit mode
+(single instance and whole series). Editing a class must not count that
+class's own current booking as "busy" against itself, or its own slot would
+incorrectly appear unavailable — `get_coach_busy_intervals` gained two new
+optional parameters for this, `p_exclude_class_id` (single-instance edit) and
+`p_exclude_series_id` (whole-series edit, since editing the whole series
+regenerates every future instance, not just the one clicked into).
+
+**Front-end connection:** `src/lib/actions/availability-suggestions.ts`
+(`getAvailableSlotSuggestions`, `checkSeriesConflictsPreview`),
+`src/components/calendar/available-slots-panel.tsx`, wired into both
+`src/components/calendar/student-class-edit-dialog.tsx` and
+`src/components/calendar/class-edit-dialog.tsx` (create and edit mode).
+
+**Server-side error messages are now locale-aware.** Every hardcoded-English
+message thrown by the booking actions (`class-shared.ts`, `classes.ts`,
+`student-classes.ts`) — the two conflict messages, the new working-hours
+message, and every generic create/save/delete fallback — is now built via
+next-intl's `getTranslations()`/`getLocale()`, called directly inside each
+Server Action. This works because the app's locale lives in the `NEXT_LOCALE`
+cookie (`src/i18n/locale.ts`), which next-intl's `getRequestConfig`
+(`src/i18n/request.ts`) already reads on every call, including from inside a
+Server Action — nothing about `ActionResult`'s `{ ok: false, error: string }`
+shape changed, only the *content* of that string is now correct for whichever
+language the user has selected, instead of always English.
+
+---
+
 ## Known gaps / deliberately deferred
 
 These are documented so nobody re-discovers them as "surprises" later:
 
+- **Coach working hours are enforced only at the moment a class is booked or
+  edited** — changing/removing a working-hours block afterward does not
+  retroactively invalidate classes already booked inside what used to be
+  covered hours. This is intentional (nobody wants existing bookings to
+  silently become "invalid"), just worth knowing so it isn't mistaken for a
+  bug later.
 - **No automated invite emails.** A coach gets a link to copy/send manually.
 - **One login can only ever link to one student record** — no support yet
   for a parent/guardian account managing multiple kids.

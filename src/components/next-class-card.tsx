@@ -20,6 +20,7 @@ import type { ClassInstance, Location, Student } from "@/lib/mock-data"
 
 interface NextClassCardProps {
   nextClass: ClassInstance | undefined
+  currentCoachId: string
   students: Student[]
   locations: Location[]
 }
@@ -42,7 +43,7 @@ function formatDayLabel(date: Date, t: (key: "today" | "tomorrow") => string, da
   return formatClubDate(date, "EEE, MMM d", dateFnsLocale)
 }
 
-export function NextClassCard({ nextClass, students, locations }: NextClassCardProps) {
+export function NextClassCard({ nextClass, currentCoachId, students, locations }: NextClassCardProps) {
   const t = useTranslations("dashboard")
   const appLocale = useLocale()
   const dateFnsLocale = getDateFnsLocale(appLocale)
@@ -143,6 +144,7 @@ export function NextClassCard({ nextClass, students, locations }: NextClassCardP
       <ClassEditDialog
         event={editingEvent}
         mode="edit"
+        currentCoachId={currentCoachId}
         students={students}
         locations={locations}
         onOpenChange={(open) => {

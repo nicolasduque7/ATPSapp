@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { requireCoachId } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -21,6 +22,7 @@ import { mapClassRow, CLASS_COLUMNS } from "@/lib/queries/class-row";
 import {
   assertNoCoachConflict,
   assertNoStudentConflict,
+  assertWithinWorkingHours,
   buildInstanceRows,
   isExclusionViolation,
 } from "@/lib/actions/class-shared";
@@ -71,10 +73,12 @@ export interface ClassSeriesUpdateInput {
 export async function createClass(input: ClassInstanceInput): Promise<ActionResult<ClassInstance>> {
   try {
     const coachId = await requireCoachId();
+    const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
 
-    await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime);
-    await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime);
+    await assertWithinWorkingHours(supabase, coachId, input.locationId, input.startTime, input.endTime, t);
+    await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime, t, locale);
+    await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime, t, locale);
 
     const { data, error } = await supabase
       .from("classes")
@@ -94,11 +98,7 @@ export async function createClass(input: ClassInstanceInput): Promise<ActionResu
 
     if (error) {
       console.error("createClass failed:", error);
-      throw new Error(
-        isExclusionViolation(error)
-          ? "That time was just taken — please try again."
-          : "Couldn't create the class. Try again.",
-      );
+      throw new Error(isExclusionViolation(error) ? t("errorTimeJustTaken") : t("errorCreateClass"));
     }
 
     revalidatePath("/");
@@ -107,23 +107,25 @@ export async function createClass(input: ClassInstanceInput): Promise<ActionResu
     return { ok: true, data: mapClassRow(data) };
   } catch (e) {
     unstable_rethrow(e);
-    return { ok: false, error: e instanceof Error ? e.message : "Couldn't create the class. Try again." };
+    const t = await getTranslations("classForm");
+    return { ok: false, error: e instanceof Error ? e.message : t("errorCreateClass") };
   }
 }
 
 export async function createClassSeries(input: ClassSeriesInput): Promise<ActionResult<ClassInstance[]>> {
   try {
     const coachId = await requireCoachId();
+    const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
 
     if (input.endDate < input.startDate) {
-      throw new Error("Until date must be on or after the start date.");
+      throw new Error(t("errorUntilAfterStart"));
     }
     if (input.frequency === "Weekly" && !input.weekdays?.length) {
-      throw new Error("Select at least one day of the week.");
+      throw new Error(t("errorSelectWeekday"));
     }
     if (input.frequency === "Monthly" && !input.dayOfMonth) {
-      throw new Error("Select a day of the month.");
+      throw new Error(t("errorSelectDayOfMonth"));
     }
 
     const pattern: RecurrencePattern = {
@@ -134,14 +136,15 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<Action
     };
     const occurrences = generateOccurrences(pattern, parseDateOnly(input.startDate), parseDateOnly(input.endDate));
     if (occurrences.length === 0) {
-      throw new Error("Until date must be on or after the start date.");
+      throw new Error(t("errorUntilAfterStart"));
     }
 
     for (const day of occurrences) {
       const startTime = combineClubDateAndTime(day, input.startTime);
       const endTime = addMinutes(startTime, input.durationMinutes);
-      await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
-      await assertNoCoachConflict(supabase, coachId, startTime, endTime);
+      await assertWithinWorkingHours(supabase, coachId, input.locationId, startTime, endTime, t);
+      await assertNoStudentConflict(supabase, input.studentId, startTime, endTime, t, locale);
+      await assertNoCoachConflict(supabase, coachId, startTime, endTime, t, locale);
     }
 
     const { data: series, error: seriesError } = await supabase
@@ -165,7 +168,7 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<Action
 
     if (seriesError) {
       console.error("createClassSeries failed:", seriesError);
-      throw new Error("Couldn't create the recurring series. Try again.");
+      throw new Error(t("errorCreateSeries"));
     }
 
     const rows = buildInstanceRows(occurrences, series.id, coachId, input.studentId, input);
@@ -174,11 +177,7 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<Action
     if (error) {
       console.error("createClassSeries instances failed:", error);
       await supabase.from("class_series").delete().eq("id", series.id);
-      throw new Error(
-        isExclusionViolation(error)
-          ? "One of these classes' times was just taken — please try again."
-          : "Couldn't create the recurring series. Try again.",
-      );
+      throw new Error(isExclusionViolation(error) ? t("errorTimeJustTakenSeries") : t("errorCreateSeries"));
     }
 
     revalidatePath("/");
@@ -187,7 +186,8 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<Action
     return { ok: true, data: (data ?? []).map((row) => mapClassRow(row)) };
   } catch (e) {
     unstable_rethrow(e);
-    return { ok: false, error: e instanceof Error ? e.message : "Couldn't create the recurring series. Try again." };
+    const t = await getTranslations("classForm");
+    return { ok: false, error: e instanceof Error ? e.message : t("errorCreateSeries") };
   }
 }
 
@@ -200,6 +200,7 @@ export async function updateClassSeries(
 ): Promise<ActionResult<ClassInstance[]>> {
   try {
     const coachId = await requireCoachId();
+    const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
     const now = new Date();
 
@@ -223,7 +224,7 @@ export async function updateClassSeries(
 
     if (seriesError) {
       console.error("updateClassSeries failed:", seriesError);
-      throw new Error("Couldn't save the series. Try again.");
+      throw new Error(t("errorSaveSeries"));
     }
 
     const { error: deleteError } = await supabase
@@ -235,7 +236,7 @@ export async function updateClassSeries(
 
     if (deleteError) {
       console.error("updateClassSeries (clearing future instances) failed:", deleteError);
-      throw new Error("Couldn't save the series. Try again.");
+      throw new Error(t("errorSaveSeries"));
     }
 
     const pattern: RecurrencePattern = {
@@ -258,19 +259,16 @@ export async function updateClassSeries(
       for (const day of occurrences) {
         const startTime = combineClubDateAndTime(day, input.startTime);
         const endTime = addMinutes(startTime, input.durationMinutes);
-        await assertNoStudentConflict(supabase, input.studentId, startTime, endTime);
-        await assertNoCoachConflict(supabase, coachId, startTime, endTime);
+        await assertWithinWorkingHours(supabase, coachId, input.locationId, startTime, endTime, t);
+        await assertNoStudentConflict(supabase, input.studentId, startTime, endTime, t, locale);
+        await assertNoCoachConflict(supabase, coachId, startTime, endTime, t, locale);
       }
 
       const rows = buildInstanceRows(occurrences, seriesId, coachId, input.studentId, input);
       const { error: insertError } = await supabase.from("classes").insert(rows);
       if (insertError) {
         console.error("updateClassSeries (inserting future instances) failed:", insertError);
-        throw new Error(
-          isExclusionViolation(insertError)
-            ? "One of these classes' times was just taken — please try again."
-            : "Couldn't save the series. Try again.",
-        );
+        throw new Error(isExclusionViolation(insertError) ? t("errorTimeJustTakenSeries") : t("errorSaveSeries"));
       }
     }
 
@@ -283,7 +281,7 @@ export async function updateClassSeries(
 
     if (error) {
       console.error("updateClassSeries (refetch) failed:", error);
-      throw new Error("Couldn't refresh the series. Try again.");
+      throw new Error(t("errorRefreshSeries"));
     }
 
     revalidatePath("/");
@@ -292,7 +290,8 @@ export async function updateClassSeries(
     return { ok: true, data: (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now)) };
   } catch (e) {
     unstable_rethrow(e);
-    return { ok: false, error: e instanceof Error ? e.message : "Couldn't save the series. Try again." };
+    const t = await getTranslations("classForm");
+    return { ok: false, error: e instanceof Error ? e.message : t("errorSaveSeries") };
   }
 }
 
@@ -311,6 +310,7 @@ export interface ClassSeriesMeta {
 // from the single instance they clicked.
 export async function getClassSeriesMeta(seriesId: string): Promise<ClassSeriesMeta> {
   const coachId = await requireCoachId();
+  const t = await getTranslations("classForm");
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -322,7 +322,7 @@ export async function getClassSeriesMeta(seriesId: string): Promise<ClassSeriesM
 
   if (error) {
     console.error("getClassSeriesMeta failed:", error);
-    throw new Error("Couldn't load the series. Try again.");
+    throw new Error(t("errorLoadSeries"));
   }
 
   return {
@@ -342,10 +342,12 @@ export async function updateClassInstance(
 ): Promise<ActionResult<ClassInstance>> {
   try {
     const coachId = await requireCoachId();
+    const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
 
-    await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime, id);
-    await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime, id);
+    await assertWithinWorkingHours(supabase, coachId, input.locationId, input.startTime, input.endTime, t);
+    await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime, t, locale, id);
+    await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime, t, locale, id);
 
     const { data, error } = await supabase
       .from("classes")
@@ -366,11 +368,7 @@ export async function updateClassInstance(
 
     if (error) {
       console.error("updateClassInstance failed:", error);
-      throw new Error(
-        isExclusionViolation(error)
-          ? "That time was just taken — please try again."
-          : "Couldn't save class. Try again.",
-      );
+      throw new Error(isExclusionViolation(error) ? t("errorTimeJustTaken") : t("errorSaveClass"));
     }
 
     revalidatePath("/");
@@ -379,20 +377,22 @@ export async function updateClassInstance(
     return { ok: true, data: mapClassRow(data) };
   } catch (e) {
     unstable_rethrow(e);
-    return { ok: false, error: e instanceof Error ? e.message : "Couldn't save class. Try again." };
+    const t = await getTranslations("classForm");
+    return { ok: false, error: e instanceof Error ? e.message : t("errorSaveClass") };
   }
 }
 
 export async function deleteClassInstance(id: string): Promise<ActionResult> {
   try {
     const coachId = await requireCoachId();
+    const t = await getTranslations("classForm");
     const supabase = await createClient();
 
     const { error } = await supabase.from("classes").delete().eq("id", id).eq("coach_id", coachId);
 
     if (error) {
       console.error("deleteClassInstance failed:", error);
-      throw new Error("Couldn't delete class. Try again.");
+      throw new Error(t("errorDeleteClassAction"));
     }
 
     revalidatePath("/");
@@ -401,7 +401,8 @@ export async function deleteClassInstance(id: string): Promise<ActionResult> {
     return { ok: true, data: undefined };
   } catch (e) {
     unstable_rethrow(e);
-    return { ok: false, error: e instanceof Error ? e.message : "Couldn't delete class. Try again." };
+    const t = await getTranslations("classForm");
+    return { ok: false, error: e instanceof Error ? e.message : t("errorDeleteClassAction") };
   }
 }
 
@@ -410,6 +411,7 @@ export async function deleteClassInstance(id: string): Promise<ActionResult> {
 export async function deleteClassSeries(seriesId: string): Promise<ActionResult> {
   try {
     const coachId = await requireCoachId();
+    const t = await getTranslations("classForm");
     const supabase = await createClient();
 
     const { error } = await supabase
@@ -420,7 +422,7 @@ export async function deleteClassSeries(seriesId: string): Promise<ActionResult>
 
     if (error) {
       console.error("deleteClassSeries failed:", error);
-      throw new Error("Couldn't delete the series. Try again.");
+      throw new Error(t("errorDeleteSeriesAction"));
     }
 
     revalidatePath("/");
@@ -429,6 +431,7 @@ export async function deleteClassSeries(seriesId: string): Promise<ActionResult>
     return { ok: true, data: undefined };
   } catch (e) {
     unstable_rethrow(e);
-    return { ok: false, error: e instanceof Error ? e.message : "Couldn't delete the series. Try again." };
+    const t = await getTranslations("classForm");
+    return { ok: false, error: e instanceof Error ? e.message : t("errorDeleteSeriesAction") };
   }
 }

@@ -14,6 +14,11 @@ export const COACH_PASSWORD = "CourtsideTest123!";
 export const COACH2_EMAIL = "coach2@test.courtside.dev";
 export const COACH2_PASSWORD = "CourtsideTest123!";
 
+// Matches scripts/seed-student.ts — a linked student login, used by specs
+// that need the student-facing app (e.g. self-booking).
+export const STUDENT_EMAIL = "student@test.courtside.dev";
+export const STUDENT_PASSWORD = "CourtsideTest123!";
+
 export function uniqueName(prefix: string): string {
   return `${prefix} ${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }

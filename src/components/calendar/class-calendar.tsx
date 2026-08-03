@@ -361,6 +361,7 @@ export function ClassCalendar({
       <ClassEditDialog
         event={selectedEvent}
         mode="edit"
+        currentCoachId={currentCoachId}
         students={students}
         locations={locations}
         onOpenChange={(open) => {
@@ -373,6 +374,7 @@ export function ClassCalendar({
       <ClassEditDialog
         event={creatingEvent}
         mode="create"
+        currentCoachId={currentCoachId}
         students={students}
         locations={locations}
         onOpenChange={(open) => {

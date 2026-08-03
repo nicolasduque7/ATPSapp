@@ -18,9 +18,29 @@ test("coach can book a class and it appears on the calendar", async ({ page }) =
   await page.goto("/students");
   await page.getByRole("button", { name: "Add student" }).click();
   await page.getByLabel("Name", { exact: true }).fill(studentName);
-  await page.getByRole("radio", { name: "4ta" }).click();
+  await page.getByRole("radio", { name: "4th" }).click();
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByLabel("Name", { exact: true })).not.toBeVisible();
+
+  // Prerequisite: declare working hours at the new location covering the
+  // class this test books below (6:00-7:00 AM tomorrow) — bookings are now
+  // validated against declared working hours, so a location with none
+  // declared would make the booking below fail. The one-off working-hours
+  // form defaults to today, same as the booking form does — it must be
+  // moved to "Tomorrow" explicitly to actually cover the class being booked.
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Add working hours" }).click();
+  await page.getByRole("button", { name: locationName }).click();
+  await page.getByRole("combobox", { name: "Date" }).click();
+  await page.getByRole("option", { name: /^Tomorrow/ }).click();
+  await expect(page.getByRole("option", { name: /^Tomorrow/ })).not.toBeVisible();
+  await page.getByRole("combobox", { name: "Start time" }).click();
+  await page.getByRole("option", { name: "6:00 AM" }).click();
+  await expect(page.getByRole("option", { name: "6:00 AM" })).not.toBeVisible();
+  await page.getByRole("combobox", { name: "End time" }).click();
+  await page.getByRole("option", { name: "8:00 AM" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("button", { name: "Add working hours" })).toBeVisible();
 
   // Book a one-off class for that student, at that location.
   await page.goto("/calendar");
@@ -90,6 +110,19 @@ test("coach can book a class and it appears on the calendar", async ({ page }) =
   await page.getByRole("button", { name: "Confirm delete" }).click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(studentName) })).not.toBeVisible();
+
+  // Clean up the working-hours block declared above before the location
+  // itself — same order as e2e/student-slot-suggestions.spec.ts.
+  await page.goto("/settings");
+  await page.getByRole("button", { name: new RegExp(locationName) }).click();
+  await page.getByRole("button", { name: "Delete working hours" }).click();
+  await page.getByRole("button", { name: "Confirm delete" }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  // The dialog can close before the delete's server round trip actually
+  // resolves — wait for the list entry itself to disappear (the one signal
+  // tied to the real data change) before navigating away, same reasoning as
+  // the notify-reminder-dialog wait after deleting a class above.
+  await expect(page.getByRole("button", { name: new RegExp(locationName) })).not.toBeVisible();
 
   await page.goto("/locations");
   await page.getByRole("button", { name: new RegExp(locationName) }).click();

@@ -30,6 +30,7 @@ import {
 import { getClassSeriesMeta } from "@/lib/actions/classes"
 import type { ClassType, Location, Student } from "@/lib/mock-data"
 import type { CalendarClassEvent, ClassFormSubmission } from "@/components/calendar/types"
+import { AvailableSlotsPanel } from "@/components/calendar/available-slots-panel"
 import {
   DAY_OF_MONTH_OPTIONS,
   DateOffsetField,
@@ -50,6 +51,7 @@ import {
 interface ClassEditDialogProps {
   event: CalendarClassEvent | null
   mode: "create" | "edit"
+  currentCoachId: string
   students: Student[]
   locations: Location[]
   onOpenChange: (open: boolean) => void
@@ -102,6 +104,7 @@ export function createDraftEvent(): CalendarClassEvent {
 export function ClassEditDialog({
   event,
   mode,
+  currentCoachId,
   students,
   locations,
   onOpenChange,
@@ -121,6 +124,7 @@ export function ClassEditDialog({
             key={event.id}
             event={event}
             mode={mode}
+            currentCoachId={currentCoachId}
             students={students}
             locations={locations}
             onOpenChange={onOpenChange}
@@ -136,6 +140,7 @@ export function ClassEditDialog({
 interface ClassEditFormProps {
   event: CalendarClassEvent
   mode: "create" | "edit"
+  currentCoachId: string
   students: Student[]
   locations: Location[]
   onOpenChange: (open: boolean) => void
@@ -146,6 +151,7 @@ interface ClassEditFormProps {
 function ClassEditForm({
   event,
   mode,
+  currentCoachId,
   students,
   locations,
   onOpenChange,
@@ -485,6 +491,33 @@ function ClassEditForm({
               ]}
             />
           </div>
+        )}
+
+        {!(mode === "edit" && seriesMetaLoading) && (
+          <AvailableSlotsPanel
+            coachId={currentCoachId}
+            locationId={locationId}
+            anchorDateOffset={usingRecurringFields ? recurringStartOffset : dateOffset}
+            durationMinutes={
+              usingRecurringFields
+                ? durationBetween(recurringStartTime, recurringEndTime, today)
+                : durationBetween(singleStartTime, singleEndTime, today)
+            }
+            today={today}
+            excludeClassId={mode === "edit" && !usingRecurringFields ? event.id : undefined}
+            excludeSeriesId={mode === "edit" && usingRecurringFields ? (seriesId ?? undefined) : undefined}
+            onPickSlot={({ dateOffset: pickedOffset, startTime, endTime }) => {
+              if (usingRecurringFields) {
+                setRecurringStartOffset(pickedOffset)
+                setRecurringStartTime(startTime)
+                setRecurringEndTime(endTime)
+              } else {
+                setDateOffset(pickedOffset)
+                setSingleStartTime(startTime)
+                setSingleEndTime(endTime)
+              }
+            }}
+          />
         )}
 
         {!usingRecurringFields && (
