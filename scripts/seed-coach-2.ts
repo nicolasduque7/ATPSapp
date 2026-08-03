@@ -39,6 +39,16 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   );
 }
 
+// This script wipes and recreates a coach's data — never let it run against
+// the production project, even if .env.local gets pointed there by mistake.
+const PROD_PROJECT_REF = "uyiqjrxmwjneaewsqznt";
+if (SUPABASE_URL.includes(PROD_PROJECT_REF)) {
+  throw new Error(
+    `Refusing to seed: NEXT_PUBLIC_SUPABASE_URL points at the production project (${PROD_PROJECT_REF}). ` +
+      "Point .env.local at the dev Supabase project before running this script.",
+  );
+}
+
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
   // Node 20 has no global WebSocket (that lands in Node 22); supabase-js

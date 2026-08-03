@@ -646,6 +646,55 @@ and the notification detail dialogs all render through this convention now.
 
 ---
 
+## 14. Environments: separate dev and prod Supabase projects
+
+Local dev/e2e and production used to share **one** Supabase project — meaning
+`npm run seed`, the e2e suite, and any local UI testing all wrote directly to
+the same data real users would eventually see. That stopped being safe once
+real coaches started signing up (this was discovered mid-migration: 3 real
+coach accounts, with real students, already existed in what we'd been
+treating as a test project). Two separate projects now exist:
+
+- **Prod** (`uyiqjrxmwjneaewsqznt.supabase.co`) — the original project.
+  Vercel's Production environment variables point here. Real users only.
+- **Dev** (`cuoemawecjtgvzaiibgj.supabase.co`) — a new project, schema
+  replayed from the same `supabase/migrations/` via the Supabase CLI
+  (`npx supabase db push`, linked with `npx supabase link --project-ref
+  <ref>`). Local `.env.local` and Vercel's Preview + Development
+  environment variables point here. Seeded with the two test coaches via
+  `npm run seed` / `npm run seed:coach2`.
+
+**Tooling added:** `supabase/config.toml` (from `npx supabase init`) gives
+the CLI a standard, repeatable way to replay migrations onto a fresh
+project — previously migrations only existed as versioned `.sql` files with
+no scripted apply path. `supabase` is now a devDependency; run CLI commands
+via `npx supabase ...`.
+
+**Safety guard:** `scripts/seed.ts` and `scripts/seed-coach-2.ts` both
+refuse to run (throw immediately) if `NEXT_PUBLIC_SUPABASE_URL` resolves to
+the prod project ref (`uyiqjrxmwjneaewsqznt`) — cheap insurance against a
+`.env.local` mix-up wiping real coach data, since both scripts wipe-and-
+recreate their target coach's classes on every run.
+
+**Prod cleanup (one-time):** the two seed coaches (`coach@test.courtside.dev`,
+`coach2@test.courtside.dev`), their 5 shared students (Ana Reyes, Leo
+Martins, Marcus Chen, Priya Nair, Sofia Petrov), and all associated
+classes/series/notifications/invites were hard-deleted from the prod
+project — verified first that no real coach's classes referenced any of
+that data. Three seed-created shared **locations** (Oakwood Tennis Club,
+Riverside Courts, Westside Park) were deliberately left alone: a real coach
+had already started booking at them, so they're no longer purely dummy
+data — deleting or deactivating them would have disrupted a real workflow.
+
+**`SUPABASE_SERVICE_ROLE_KEY` in Vercel:** deliberately not set. It's only
+read by the local seed scripts (`scripts/seed.ts`/`seed-coach-2.ts`), never
+by any server action, route handler, or server component in `src/` — the
+deployed app has no legitimate runtime use for it, so it stays out of
+Vercel entirely rather than carrying a highly-privileged key with no
+purpose there.
+
+---
+
 ## Known gaps / deliberately deferred
 
 These are documented so nobody re-discovers them as "surprises" later:

@@ -39,6 +39,16 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   );
 }
 
+// This script wipes and recreates a coach's data — never let it run against
+// the production project, even if .env.local gets pointed there by mistake.
+const PROD_PROJECT_REF = "uyiqjrxmwjneaewsqznt";
+if (SUPABASE_URL.includes(PROD_PROJECT_REF)) {
+  throw new Error(
+    `Refusing to seed: NEXT_PUBLIC_SUPABASE_URL points at the production project (${PROD_PROJECT_REF}). ` +
+      "Point .env.local at the dev Supabase project before running this script.",
+  );
+}
+
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
   // Node 20 has no global WebSocket (that lands in Node 22); supabase-js
@@ -230,17 +240,22 @@ async function seed(): Promise<void> {
     location: string;
     type: ClassType;
   }
+  // dayOffset is relative to "today", so whichever entry lands on a Tuesday
+  // (varies by run date) must not overlap the weekly recurring series below,
+  // which is pinned to Tuesdays at 16:00-16:45 for the same coach — keep
+  // every hour here clear of [16:00, 16:45) or classes_no_coach_overlap
+  // will intermittently fail depending on what weekday the script runs on.
   const ONE_OFF_CLASSES: OneOffSeed[] = [
     // past (completed)
     { dayOffset: -3, hour: 9, minute: 0, durationMinutes: 60, student: "Marcus Chen", location: "Riverside Courts", type: "Private" },
-    { dayOffset: -2, hour: 16, minute: 0, durationMinutes: 45, student: "Sofia Petrov", location: "Westside Park", type: "Group" },
+    { dayOffset: -2, hour: 13, minute: 0, durationMinutes: 45, student: "Sofia Petrov", location: "Westside Park", type: "Group" },
     { dayOffset: -1, hour: 17, minute: 30, durationMinutes: 60, student: "Priya Nair", location: "Oakwood Tennis Club", type: "Match" },
     // today
     { dayOffset: 0, hour: 8, minute: 0, durationMinutes: 60, student: "Ana Reyes", location: "Riverside Courts", type: "Private" },
     { dayOffset: 0, hour: 18, minute: 0, durationMinutes: 60, student: "Marcus Chen", location: "Westside Park", type: "Private" },
     // upcoming
     { dayOffset: 1, hour: 9, minute: 30, durationMinutes: 45, student: "Leo Martins", location: "Westside Park", type: "Group" },
-    { dayOffset: 2, hour: 16, minute: 0, durationMinutes: 60, student: "Sofia Petrov", location: "Oakwood Tennis Club", type: "Private" },
+    { dayOffset: 2, hour: 11, minute: 0, durationMinutes: 60, student: "Sofia Petrov", location: "Oakwood Tennis Club", type: "Private" },
     { dayOffset: 4, hour: 10, minute: 0, durationMinutes: 60, student: "Priya Nair", location: "Riverside Courts", type: "Match" },
     { dayOffset: 6, hour: 15, minute: 0, durationMinutes: 60, student: "Ana Reyes", location: "Oakwood Tennis Club", type: "Private" },
   ];
