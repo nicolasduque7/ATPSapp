@@ -195,6 +195,19 @@ if you ever see a public, pre-login page "not working" (redirecting to
   (`src/app/student/page.tsx`) — today just a placeholder ("your account is
   set up") since the real student Dashboard/Calendar don't exist yet.
 
+**Display name fix (`fix_student_display_name` migration):** the student
+branch of `handle_new_user()` originally set `profiles.display_name` from
+`raw_user_meta_data->>'full_name'`, same as the coach branch — but
+`redeemInvite` never sends a `full_name` in that metadata (the invite form
+is password-only; the name already exists on the `students` row being
+linked), so it was always inserted as `NULL`, with no fallback like the
+coach branch's `coalesce(..., email)`. Fixed by having the trigger read the
+name straight off the `students` row it links two statements earlier
+(`update students ... returning name into v_student_name`), with a
+same-migration one-time backfill for any student profiles already created
+with a null `display_name`. No change needed to `redeemInvite` or the
+invite form — this is entirely a DB-side fix.
+
 **Why `/signup` is a chooser, not a bare form:** a student who ends up on a
 generic "create an account" form (instead of using their invite link) would
 trigger the `handle_new_user()` account-creation trigger with no invite context, giving
