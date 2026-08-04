@@ -51,8 +51,16 @@ test("coach can book a Group class with multiple students, edit the roster, and 
   // Type is the very first field — picking Group swaps in the multi-select
   // before the Student field is even reachable, so this must happen first.
   await page.getByRole("radio", { name: "Group", exact: true }).click();
-  await page.getByRole("button", { name: new RegExp(`^${hostName}`) }).click();
-  await page.getByRole("button", { name: new RegExp(`^${participantName}`) }).click();
+  // The multi-select is a searchable dropdown now: type a name to filter,
+  // then click the matching option. Selected students render as separate
+  // chips below (still plain toggle buttons, see the "Host" badge check
+  // and the removal step further down).
+  const studentsCombobox = page.getByRole("combobox", { name: "Students" });
+  await studentsCombobox.click();
+  await studentsCombobox.fill(hostName);
+  await page.getByRole("option", { name: new RegExp(hostName) }).click();
+  await studentsCombobox.fill(participantName);
+  await page.getByRole("option", { name: new RegExp(participantName) }).click();
   // First picked student is the host — the chip shows a "Host" badge.
   await expect(page.getByRole("button", { name: new RegExp(`^${hostName}.*Host`) })).toBeVisible();
 
@@ -205,8 +213,12 @@ test("booking a Group class is rejected and names the conflicting student when o
   // Now try to book a Group class with both students at an overlapping time.
   await page.getByRole("button", { name: "Add class" }).click();
   await page.getByRole("radio", { name: "Group", exact: true }).click();
-  await page.getByRole("button", { name: new RegExp(`^${freeStudentName}`) }).click();
-  await page.getByRole("button", { name: new RegExp(`^${busyStudentName}`) }).click();
+  const studentsCombobox = page.getByRole("combobox", { name: "Students" });
+  await studentsCombobox.click();
+  await studentsCombobox.fill(freeStudentName);
+  await page.getByRole("option", { name: new RegExp(freeStudentName) }).click();
+  await studentsCombobox.fill(busyStudentName);
+  await page.getByRole("option", { name: new RegExp(busyStudentName) }).click();
   await page.getByRole("radio", { name: locationName }).click();
   await page.getByRole("combobox", { name: "Date" }).click();
   await page.getByRole("option", { name: /^Tomorrow/ }).click();

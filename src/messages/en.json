@@ -88,6 +88,8 @@
     "student": "Student",
     "selectStudent": "Select a student",
     "students": "Students",
+    "searchStudents": "Search students...",
+    "noStudentsFound": "No students found.",
     "host": "Host",
     "addClassmates": "Add classmates",
     "addClassmatesCaption": "Optional — pick other students to join this class.",

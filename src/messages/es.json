@@ -88,6 +88,8 @@
     "student": "Estudiante",
     "selectStudent": "Selecciona un estudiante",
     "students": "Estudiantes",
+    "searchStudents": "Buscar estudiantes...",
+    "noStudentsFound": "No se encontraron estudiantes.",
     "host": "Anfitrión",
     "addClassmates": "Agregar compañeros",
     "addClassmatesCaption": "Opcional: elige otros estudiantes para que se unan a esta clase.",

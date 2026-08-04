@@ -14,6 +14,15 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxIcon,
+  ComboboxInput,
+  ComboboxInputGroup,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox"
 import { cn } from "@/lib/utils"
 import { getLocationColorStyle } from "@/lib/location-colors"
 import {
@@ -172,6 +181,14 @@ function ClassEditForm({
   const [studentIds, setStudentIds] = useState<string[]>(
     mode === "create" ? [] : [event.resource.studentId, ...event.resource.participantStudentIds]
   )
+  // The Private picker's search text — mirrors the currently selected
+  // student's label at rest, like a normal single-select, but stays
+  // locally owned (see the comment on the Combobox below for why).
+  const [studentQuery, setStudentQuery] = useState(() => {
+    if (mode === "create") return ""
+    const s = students.find((student) => student.id === event.resource.studentId)
+    return s ? `${s.name} · ${s.level}` : ""
+  })
   const [locationId, setLocationId] = useState<string | null>(
     mode === "create" ? null : event.resource.locationId
   )
@@ -439,24 +456,44 @@ function ClassEditForm({
             <label htmlFor={`${formId}-student`} className="text-xs font-medium text-muted-foreground">
               {t("student")}
             </label>
-            <Select value={studentIds[0] ?? null} onValueChange={(value) => setStudentIds([value as string])}>
-              <SelectTrigger id={`${formId}-student`}>
-                <SelectValue>
-                  {(value: string | null) => {
-                    const s = students.find((student) => student.id === value)
-                    if (!s) return <span className="text-muted-foreground">{t("selectStudent")}</span>
-                    return `${s.name} · ${s.level}`
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {visibleStudents.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name} · {s.level}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              value={visibleStudents.find((s) => s.id === studentIds[0]) ?? null}
+              onValueChange={(student: Student | null, eventDetails: { reason: string }) => {
+                // Ignore Escape/outside-click/blur clears — only an actual
+                // item pick should change the selection.
+                if (eventDetails.reason !== "item-press") return
+                setStudentIds(student ? [student.id] : [])
+                setStudentQuery(student ? `${student.name} · ${student.level}` : "")
+              }}
+              inputValue={studentQuery}
+              onInputValueChange={setStudentQuery}
+              isItemEqualToValue={(a: Student, b: Student) => a.id === b.id}
+            >
+              <ComboboxInputGroup>
+                <ComboboxInput id={`${formId}-student`} placeholder={t("selectStudent")} />
+                <ComboboxIcon />
+              </ComboboxInputGroup>
+              <ComboboxContent>
+                {(() => {
+                  const normalizedQuery = studentQuery.trim().toLowerCase()
+                  const filtered = normalizedQuery
+                    ? visibleStudents.filter((s) => `${s.name} · ${s.level}`.toLowerCase().includes(normalizedQuery))
+                    : visibleStudents
+                  if (filtered.length === 0) {
+                    return <p className="px-2.5 py-2 text-sm text-muted-foreground">{t("noStudentsFound")}</p>
+                  }
+                  return (
+                    <ComboboxList>
+                      {filtered.map((s) => (
+                        <ComboboxItem key={s.id} value={s}>
+                          {s.name} · {s.level}
+                        </ComboboxItem>
+                      ))}
+                    </ComboboxList>
+                  )
+                })()}
+              </ComboboxContent>
+            </Combobox>
           </div>
         ) : (
           <StudentMultiSelectField
