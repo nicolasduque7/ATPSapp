@@ -47,6 +47,9 @@ import {
   toTimeInputValue,
   weekdayShortLabel,
 } from "@/components/calendar/recurrence-fields"
+import { StudentMultiSelectField } from "@/components/calendar/student-multi-select-field"
+
+const MAX_STUDENTS = 8
 
 interface ClassEditDialogProps {
   event: CalendarClassEvent | null
@@ -97,6 +100,8 @@ export function createDraftEvent(): CalendarClassEvent {
       seriesId: null,
       isOpen: false,
       maxJoiners: null,
+      participantStudentIds: [],
+      participantNames: [],
     },
   }
 }
@@ -164,8 +169,8 @@ function ClassEditForm({
   const tr = useTranslations("recurrence")
   const locale = useLocale()
   const formId = useId()
-  const [studentId, setStudentId] = useState<string | null>(
-    mode === "create" ? null : event.resource.studentId
+  const [studentIds, setStudentIds] = useState<string[]>(
+    mode === "create" ? [] : [event.resource.studentId, ...event.resource.participantStudentIds]
   )
   const [locationId, setLocationId] = useState<string | null>(
     mode === "create" ? null : event.resource.locationId
@@ -173,6 +178,25 @@ function ClassEditForm({
   const [classType, setClassType] = useState<ClassType | null>(
     mode === "create" ? null : event.resource.type
   )
+
+  function handleClassTypeChange(next: ClassType) {
+    setClassType(next)
+    if (next === "Private") {
+      setStudentIds((prev) => prev.slice(0, 1))
+    }
+  }
+
+  function toggleStudent(id: string) {
+    if (classType === "Private") {
+      setStudentIds([id])
+      return
+    }
+    setStudentIds((prev) => {
+      if (prev.includes(id)) return prev.filter((sid) => sid !== id)
+      if (prev.length >= MAX_STUDENTS) return prev
+      return [...prev, id]
+    })
+  }
   const [isOpen, setIsOpen] = useState(mode === "create" ? false : event.resource.isOpen)
   const [maxJoiners, setMaxJoiners] = useState(
     mode === "create" ? 1 : (event.resource.maxJoiners ?? 1)
@@ -187,8 +211,8 @@ function ClassEditForm({
   // selections, but a class already booked against one keeps showing it so
   // editing that class doesn't break.
   const visibleStudents = useMemo(
-    () => students.filter((s) => !s.deactivatedAt || s.id === studentId),
-    [students, studentId]
+    () => students.filter((s) => !s.deactivatedAt || studentIds.includes(s.id)),
+    [students, studentIds]
   )
   const visibleLocations = useMemo(
     () => locations.filter((l) => !l.deactivatedAt || l.id === locationId),
@@ -278,14 +302,13 @@ function ClassEditForm({
   async function handleSubmit(formEvent: React.FormEvent) {
     formEvent.preventDefault()
 
-    if (!studentId || !locationId || !classType) {
+    if (studentIds.length === 0 || !locationId || !classType) {
       setError(t("errorSelectAll"))
       return
     }
 
-    const student = students.find((s) => s.id === studentId)
     const location = locations.find((l) => l.id === locationId)
-    if (!student || !location) return
+    if (!location) return
 
     if (usingRecurringFields) {
       if (recurringEndTime <= recurringStartTime) {
@@ -319,7 +342,7 @@ function ClassEditForm({
           await onSave({
             kind: "series-create",
             input: {
-              studentId: student.id,
+              studentIds,
               locationId: location.id,
               type: classType,
               frequency,
@@ -337,7 +360,7 @@ function ClassEditForm({
             kind: "series-edit",
             seriesId,
             input: {
-              studentId: student.id,
+              studentIds,
               locationId: location.id,
               type: classType,
               intervalCount,
@@ -354,7 +377,7 @@ function ClassEditForm({
         const start = combineClubDateAndTime(day, singleStartTime)
         const end = combineClubDateAndTime(day, singleEndTime)
         const input = {
-          studentId: student.id,
+          studentIds,
           locationId: location.id,
           type: classType,
           startTime: start,
@@ -389,28 +412,64 @@ function ClassEditForm({
     <>
       <form id={formId} onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={`${formId}-student`} className="text-xs font-medium text-muted-foreground">
-            {t("student")}
-          </label>
-          <Select value={studentId} onValueChange={(value) => setStudentId(value as string)}>
-            <SelectTrigger id={`${formId}-student`}>
-              <SelectValue>
-                {(value: string | null) => {
-                  const s = students.find((student) => student.id === value)
-                  if (!s) return <span className="text-muted-foreground">{t("selectStudent")}</span>
-                  return `${s.name} · ${s.level}`
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {visibleStudents.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name} · {s.level}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <span className="text-xs font-medium text-muted-foreground">{t("type")}</span>
+          <div role="radiogroup" aria-label={t("type")} className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1">
+            {CLASS_TYPES.map((classTypeOption) => (
+              <button
+                key={classTypeOption}
+                type="button"
+                role="radio"
+                aria-checked={classType === classTypeOption}
+                onClick={() => handleClassTypeChange(classTypeOption)}
+                className={cn(
+                  "cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none",
+                  classType === classTypeOption
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {te(classTypeOption)}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {classType === "Private" || classType === null ? (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={`${formId}-student`} className="text-xs font-medium text-muted-foreground">
+              {t("student")}
+            </label>
+            <Select value={studentIds[0] ?? null} onValueChange={(value) => setStudentIds([value as string])}>
+              <SelectTrigger id={`${formId}-student`}>
+                <SelectValue>
+                  {(value: string | null) => {
+                    const s = students.find((student) => student.id === value)
+                    if (!s) return <span className="text-muted-foreground">{t("selectStudent")}</span>
+                    return `${s.name} · ${s.level}`
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {visibleStudents.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name} · {s.level}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <StudentMultiSelectField
+            id={`${formId}-students`}
+            label={t("students")}
+            options={visibleStudents}
+            selectedIds={studentIds}
+            onToggle={toggleStudent}
+            maxCount={MAX_STUDENTS}
+            showHostBadge
+            hostLabel={t("host")}
+          />
+        )}
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">{t("location")}</span>
@@ -437,29 +496,6 @@ function ClassEditForm({
                 </button>
               )
             })}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">{t("type")}</span>
-          <div role="radiogroup" aria-label={t("type")} className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1">
-            {CLASS_TYPES.map((classTypeOption) => (
-              <button
-                key={classTypeOption}
-                type="button"
-                role="radio"
-                aria-checked={classType === classTypeOption}
-                onClick={() => setClassType(classTypeOption)}
-                className={cn(
-                  "cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none",
-                  classType === classTypeOption
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {te(classTypeOption)}
-              </button>
-            ))}
           </div>
         </div>
 

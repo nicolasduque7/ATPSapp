@@ -22,14 +22,22 @@ import { mapClassRow, CLASS_COLUMNS } from "@/lib/queries/class-row";
 import {
   assertNoCoachConflict,
   assertNoStudentConflict,
+  assertValidRoster,
   assertWithinWorkingHours,
   buildInstanceRows,
+  buildParticipantRows,
+  getParticipantsByClassId,
+  getStudentDisplayNames,
   isExclusionViolation,
 } from "@/lib/actions/class-shared";
 import type { ActionResult } from "@/lib/actions/result";
 
+// `studentIds` is the FULL roster (host + participants), in the order
+// picked — `studentIds[0]` becomes `classes.student_id` (the host), the
+// rest become `class_participants` rows. For a Private class this is
+// always exactly one id (enforced by assertValidRoster).
 export interface ClassInstanceInput {
-  studentId: string;
+  studentIds: string[];
   locationId: string;
   type: ClassType;
   startTime: Date;
@@ -40,7 +48,7 @@ export interface ClassInstanceInput {
 }
 
 export interface ClassSeriesInput {
-  studentId: string;
+  studentIds: string[];
   locationId: string;
   type: ClassType;
   frequency: SeriesFrequency;
@@ -59,7 +67,7 @@ export interface ClassSeriesInput {
 // re-reads it from the DB after updating so a crafted request can't change
 // it via this path either.
 export interface ClassSeriesUpdateInput {
-  studentId: string;
+  studentIds: string[];
   locationId: string;
   type: ClassType;
   intervalCount: number;
@@ -70,21 +78,42 @@ export interface ClassSeriesUpdateInput {
   endDate: string; // "YYYY-MM-DD", club-local
 }
 
+// Sequential per-student conflict checks, in roster order. `names` is only
+// populated (and only consulted) when there's more than one student, so the
+// rejection message can name exactly who has the conflict.
+async function assertNoConflictForRoster(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  studentIds: string[],
+  startTime: Date,
+  endTime: Date,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+  locale: string,
+  excludeClassId?: string,
+): Promise<void> {
+  const names = studentIds.length > 1 ? await getStudentDisplayNames(supabase, studentIds) : new Map<string, string>();
+  for (const studentId of studentIds) {
+    await assertNoStudentConflict(supabase, studentId, startTime, endTime, t, locale, excludeClassId, names.get(studentId));
+  }
+}
+
 export async function createClass(input: ClassInstanceInput): Promise<ActionResult<ClassInstance>> {
   try {
     const coachId = await requireCoachId();
     const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
 
+    assertValidRoster(input.studentIds, input.type, t);
+    const [hostId, ...participantIds] = input.studentIds;
+
     await assertWithinWorkingHours(supabase, coachId, input.locationId, input.startTime, input.endTime, t);
-    await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime, t, locale);
+    await assertNoConflictForRoster(supabase, input.studentIds, input.startTime, input.endTime, t, locale);
     await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime, t, locale);
 
     const { data, error } = await supabase
       .from("classes")
       .insert({
         coach_id: coachId,
-        student_id: input.studentId,
+        student_id: hostId,
         location_id: input.locationId,
         class_type: input.type,
         start_time: formatDbTimestamp(input.startTime),
@@ -101,10 +130,25 @@ export async function createClass(input: ClassInstanceInput): Promise<ActionResu
       throw new Error(isExclusionViolation(error) ? t("errorTimeJustTaken") : t("errorCreateClass"));
     }
 
+    if (participantIds.length > 0) {
+      const rows = participantIds.map((studentId) => ({
+        class_id: data.id,
+        student_id: studentId,
+        start_time: formatDbTimestamp(input.startTime),
+        end_time: formatDbTimestamp(input.endTime),
+      }));
+      const { error: participantError } = await supabase.from("class_participants").insert(rows);
+      if (participantError) {
+        console.error("createClass participants failed:", participantError);
+        await supabase.from("classes").delete().eq("id", data.id);
+        throw new Error(isExclusionViolation(participantError) ? t("errorTimeJustTaken") : t("errorCreateClass"));
+      }
+    }
+
     revalidatePath("/");
     revalidatePath("/students");
     revalidatePath("/calendar");
-    return { ok: true, data: mapClassRow(data) };
+    return { ok: true, data: mapClassRow(data, false, participantIds) };
   } catch (e) {
     unstable_rethrow(e);
     const t = await getTranslations("classForm");
@@ -117,6 +161,9 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<Action
     const coachId = await requireCoachId();
     const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
+
+    assertValidRoster(input.studentIds, input.type, t);
+    const [hostId, ...participantIds] = input.studentIds;
 
     if (input.endDate < input.startDate) {
       throw new Error(t("errorUntilAfterStart"));
@@ -143,7 +190,7 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<Action
       const startTime = combineClubDateAndTime(day, input.startTime);
       const endTime = addMinutes(startTime, input.durationMinutes);
       await assertWithinWorkingHours(supabase, coachId, input.locationId, startTime, endTime, t);
-      await assertNoStudentConflict(supabase, input.studentId, startTime, endTime, t, locale);
+      await assertNoConflictForRoster(supabase, input.studentIds, startTime, endTime, t, locale);
       await assertNoCoachConflict(supabase, coachId, startTime, endTime, t, locale);
     }
 
@@ -151,7 +198,7 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<Action
       .from("class_series")
       .insert({
         coach_id: coachId,
-        student_id: input.studentId,
+        student_id: hostId,
         location_id: input.locationId,
         class_type: input.type,
         frequency: input.frequency,
@@ -171,7 +218,7 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<Action
       throw new Error(t("errorCreateSeries"));
     }
 
-    const rows = buildInstanceRows(occurrences, series.id, coachId, input.studentId, input);
+    const rows = buildInstanceRows(occurrences, series.id, coachId, hostId, input);
     const { data, error } = await supabase.from("classes").insert(rows).select(CLASS_COLUMNS);
 
     if (error) {
@@ -180,10 +227,22 @@ export async function createClassSeries(input: ClassSeriesInput): Promise<Action
       throw new Error(isExclusionViolation(error) ? t("errorTimeJustTakenSeries") : t("errorCreateSeries"));
     }
 
+    if (participantIds.length > 0) {
+      const participantRows = buildParticipantRows(data, participantIds);
+      const { error: participantError } = await supabase.from("class_participants").insert(participantRows);
+      if (participantError) {
+        console.error("createClassSeries participants failed:", participantError);
+        await supabase.from("class_series").delete().eq("id", series.id);
+        throw new Error(
+          isExclusionViolation(participantError) ? t("errorTimeJustTakenSeries") : t("errorCreateSeries"),
+        );
+      }
+    }
+
     revalidatePath("/");
     revalidatePath("/students");
     revalidatePath("/calendar");
-    return { ok: true, data: (data ?? []).map((row) => mapClassRow(row)) };
+    return { ok: true, data: (data ?? []).map((row) => mapClassRow(row, false, participantIds)) };
   } catch (e) {
     unstable_rethrow(e);
     const t = await getTranslations("classForm");
@@ -204,10 +263,13 @@ export async function updateClassSeries(
     const supabase = await createClient();
     const now = new Date();
 
+    assertValidRoster(input.studentIds, input.type, t);
+    const [hostId, ...participantIds] = input.studentIds;
+
     const { data: updatedSeries, error: seriesError } = await supabase
       .from("class_series")
       .update({
-        student_id: input.studentId,
+        student_id: hostId,
         location_id: input.locationId,
         class_type: input.type,
         interval_count: input.intervalCount,
@@ -260,15 +322,30 @@ export async function updateClassSeries(
         const startTime = combineClubDateAndTime(day, input.startTime);
         const endTime = addMinutes(startTime, input.durationMinutes);
         await assertWithinWorkingHours(supabase, coachId, input.locationId, startTime, endTime, t);
-        await assertNoStudentConflict(supabase, input.studentId, startTime, endTime, t, locale);
+        await assertNoConflictForRoster(supabase, input.studentIds, startTime, endTime, t, locale);
         await assertNoCoachConflict(supabase, coachId, startTime, endTime, t, locale);
       }
 
-      const rows = buildInstanceRows(occurrences, seriesId, coachId, input.studentId, input);
-      const { error: insertError } = await supabase.from("classes").insert(rows);
+      const rows = buildInstanceRows(occurrences, seriesId, coachId, hostId, input);
+      const { data: insertedRows, error: insertError } = await supabase.from("classes").insert(rows).select(CLASS_COLUMNS);
       if (insertError) {
         console.error("updateClassSeries (inserting future instances) failed:", insertError);
         throw new Error(isExclusionViolation(insertError) ? t("errorTimeJustTakenSeries") : t("errorSaveSeries"));
+      }
+
+      if (participantIds.length > 0) {
+        const participantRows = buildParticipantRows(insertedRows ?? [], participantIds);
+        const { error: participantError } = await supabase.from("class_participants").insert(participantRows);
+        if (participantError) {
+          console.error("updateClassSeries participants failed:", participantError);
+          await supabase
+            .from("classes")
+            .delete()
+            .in("id", (insertedRows ?? []).map((row) => row.id));
+          throw new Error(
+            isExclusionViolation(participantError) ? t("errorTimeJustTakenSeries") : t("errorSaveSeries"),
+          );
+        }
       }
     }
 
@@ -284,10 +361,20 @@ export async function updateClassSeries(
       throw new Error(t("errorRefreshSeries"));
     }
 
+    const rosterByClassId = await getParticipantsByClassId(
+      supabase,
+      (data ?? []).map((row) => row.id),
+    );
+
     revalidatePath("/");
     revalidatePath("/students");
     revalidatePath("/calendar");
-    return { ok: true, data: (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now)) };
+    return {
+      ok: true,
+      data: (data ?? []).map((row) =>
+        mapClassRow(row, parseDbTimestamp(row.end_time) < now, rosterByClassId.get(row.id) ?? []),
+      ),
+    };
   } catch (e) {
     unstable_rethrow(e);
     const t = await getTranslations("classForm");
@@ -345,14 +432,23 @@ export async function updateClassInstance(
     const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
 
+    assertValidRoster(input.studentIds, input.type, t);
+    const [hostId, ...participantIds] = input.studentIds;
+
+    const { data: existingParticipants } = await supabase
+      .from("class_participants")
+      .select("student_id")
+      .eq("class_id", id);
+    const existingParticipantIds = (existingParticipants ?? []).map((row) => row.student_id);
+
     await assertWithinWorkingHours(supabase, coachId, input.locationId, input.startTime, input.endTime, t);
-    await assertNoStudentConflict(supabase, input.studentId, input.startTime, input.endTime, t, locale, id);
+    await assertNoConflictForRoster(supabase, input.studentIds, input.startTime, input.endTime, t, locale, id);
     await assertNoCoachConflict(supabase, coachId, input.startTime, input.endTime, t, locale, id);
 
     const { data, error } = await supabase
       .from("classes")
       .update({
-        student_id: input.studentId,
+        student_id: hostId,
         location_id: input.locationId,
         class_type: input.type,
         start_time: formatDbTimestamp(input.startTime),
@@ -371,10 +467,44 @@ export async function updateClassInstance(
       throw new Error(isExclusionViolation(error) ? t("errorTimeJustTaken") : t("errorSaveClass"));
     }
 
+    // Plain set difference against the freshly-read roster. This handles
+    // host promotion/demotion for free: a participant becoming host was
+    // read above but is absent from the new participant list, so it lands
+    // in toRemove; the old host becoming a participant was never in
+    // class_participants (it lived in classes.student_id instead), so it
+    // lands in toAdd, freshly validated by the roster check above.
+    const toRemove = existingParticipantIds.filter((sid) => !participantIds.includes(sid));
+    const toAdd = participantIds.filter((sid) => !existingParticipantIds.includes(sid));
+
+    if (toRemove.length > 0) {
+      const { error: removeError } = await supabase
+        .from("class_participants")
+        .delete()
+        .eq("class_id", id)
+        .in("student_id", toRemove);
+      if (removeError) {
+        console.error("updateClassInstance (removing participants) failed:", removeError);
+        throw new Error(t("errorSaveClass"));
+      }
+    }
+    if (toAdd.length > 0) {
+      const rows = toAdd.map((studentId) => ({
+        class_id: id,
+        student_id: studentId,
+        start_time: formatDbTimestamp(input.startTime),
+        end_time: formatDbTimestamp(input.endTime),
+      }));
+      const { error: addError } = await supabase.from("class_participants").insert(rows);
+      if (addError) {
+        console.error("updateClassInstance (adding participants) failed:", addError);
+        throw new Error(isExclusionViolation(addError) ? t("errorTimeJustTaken") : t("errorSaveClass"));
+      }
+    }
+
     revalidatePath("/");
     revalidatePath("/students");
     revalidatePath("/calendar");
-    return { ok: true, data: mapClassRow(data) };
+    return { ok: true, data: mapClassRow(data, false, participantIds) };
   } catch (e) {
     unstable_rethrow(e);
     const t = await getTranslations("classForm");

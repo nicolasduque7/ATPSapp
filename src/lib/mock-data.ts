@@ -59,6 +59,10 @@ export interface ClassInstance {
   notes?: string
   isOpen: boolean
   maxJoiners: number | null
+  // Everyone on the roster besides the host (`studentId`) — populated for
+  // Group/Match classes with directly-added students, and/or approved Open
+  // Class joiners. Empty for a plain Private class.
+  participantStudentIds: string[]
 }
 
 export interface AvailabilityBlock {

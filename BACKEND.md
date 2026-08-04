@@ -552,6 +552,127 @@ Classes" toggle and `open-class-view-dialog.tsx` (view + "Request to join");
 `src/app/student/notifications/` (student sent/received page), both under
 `src/components/notifications/`.
 
+## 11a. Direct-add rostering (Group/Match multi-student booking)
+
+Separate from Open Class above, a coach or student can now hand-pick
+multiple students directly into a Group/Match class **at booking time** —
+added immediately, no approval step, no relationship to the join-request
+flow. The two mechanisms are deliberately orthogonal and compose on the
+same `class_participants` table: a class can be both hand-picked (some
+students added directly) **and** left Open (so other, not-pre-picked
+students can separately request to join on top) — `is_open`/`max_joiners`
+work identically to before, no schema change needed there.
+
+**Host selection:** `classes.student_id` continues to mean exactly one
+thing — for a coach booking, it's the first student picked in the UI; for a
+student's own booking, it's always the booking student themselves
+(server-derived from `requireStudent()`, never client-trusted, same as
+every other student-side write). Everyone else picked goes into
+`class_participants`, capped at 8 total students per class (host +
+participants combined).
+
+**New RLS policies** (`20260804010000_class_participants_direct_add.sql`):
+`class_participants` previously had zero client INSERT/UPDATE/DELETE
+policies — only `decide_join_request()` wrote it. Four new policies let a
+coach insert/delete participant rows for a class they own, and a student
+insert/delete participant rows for a class where they're the host — no
+UPDATE policy needed, since `start_time`/`end_time` still stay in sync via
+the existing `classes_sync_participants_time` trigger. A follow-up
+migration (`20260804010100_class_participants_cross_coach_read.sql`) adds
+a fourth SELECT policy, `class_participants_select_all_coaches`
+(`is_coach()`, no ownership filter) — the existing `class_participants_select_coach`
+was still scoped to "a class I coach," which would have hidden another
+coach's Group/Match roster from the Calendar's cross-coach visibility
+toggle even though that toggle already exposes every class's host via
+`classes_select_coach`.
+
+**Two new narrow RPCs**, same "expose only display fields" pattern as
+`get_open_classes_for_student`:
+- `get_addable_students()` — every active student except the caller, for
+  the student dialog's classmate picker. Needed because
+  `students_select_own_linked` only ever lets a student read their own row.
+- `get_student_display_names(p_ids uuid[])` — resolves names for a set of
+  student ids, used ONLY to build the conflict-rejection message below
+  (never for authorization). On the coach side this is called for
+  consistency even though a coach could just query `students` directly
+  (shared roster read access already exists); on the student side there's
+  no alternative, since RLS blocks reading a classmate's row any other way.
+
+**Conflict checking — validate-all-then-bulk-insert, extended per student.**
+The existing `createClassSeries`/`updateClassSeries` idiom (sequential
+read-only conflict-check RPC calls that abort before any write, then one
+atomic multi-row `.insert()`) is unchanged in shape, just nested one level
+deeper: `assertNoStudentConflict` now runs once per **(occurrence ×
+selected student)**, while `assertNoCoachConflict`/`assertWithinWorkingHours`
+still run once per occurrence — they're about the coach/location/time,
+independent of how many students are on the roster. All-or-nothing: if any
+selected student conflicts anywhere, the whole save (single class or entire
+series) is rejected before anything is written.
+
+**The rejection message now names the specific student.** `assertNoStudentConflict`
+(`src/lib/actions/class-shared.ts`) gained one optional trailing param,
+`studentName` — when checking more than one student, it's passed and the
+new `errorStudentConflictNamed` message is thrown instead of today's
+unnamed `errorStudentConflict` (e.g. *"María is already booked with Coach
+X from 3:00 to 4:00pm. Remove them from this class, or pick a different
+time above."*, and the Spanish equivalent). The single-student Private path
+never passes a name, so its message is byte-for-byte unchanged. On the
+coach side, names are resolved server-side via `get_student_display_names`
+(fully server-verified). On the student side, RLS blocks that same lookup
+for classmates, so the client sends a parallel `participantNames: string[]`
+alongside `participantStudentIds` — sourced from the already-loaded
+`get_addable_students()` result the picker renders from. This is purely
+cosmetic (only affects message text); the actual conflict check still
+validates by id via the RPC regardless of what name string is supplied.
+
+**Edit-mode roster diffing** (`updateClassInstance`/`updateStudentClassInstance`):
+existing `class_participants` rows for the class are read, then diffed
+against the new roster as a plain set difference (`toAdd`/`toRemove`) — no
+special-casing needed for host promotion/demotion. A participant becoming
+the new host was read as an existing participant but is absent from the
+new participant list, so it lands in `toRemove` (its stale row is deleted).
+The old host becoming a regular participant was never in
+`class_participants` (it lived in `classes.student_id` instead), so it
+lands in `toAdd`, freshly validated like any newly-added student. For
+whole-series edits (`updateClassSeries`/`updateStudentClassSeries`), no
+diffing is needed — the existing regenerate-future-instances behavior
+already deletes and recreates every future `classes` row (cascading their
+`class_participants`), so the new roster is simply inserted alongside the
+freshly-generated rows; past/completed instances and their participants are
+untouched, exactly like every other whole-series edit.
+
+**Bulk-insert row correlation for series creates/regenerates:** a fresh
+multi-row `classes` insert's `RETURNING` order isn't guaranteed to match
+the input array order, so `buildParticipantRows` (`class-shared.ts`)
+correlates each returned row back to its occurrence by `start_time` (unique
+per occurrence within one batch), not array index, before fanning out one
+`class_participants` row per (occurrence × participant).
+
+**Capacity math needs zero changes.** `decide_join_request`'s existing
+`count(*) from class_participants` capacity check already counts *every*
+row regardless of how it got there — `max_joiners` already meant "additional
+joiners beyond whoever's already on the roster," the moment
+`class_participants` could be pre-populated by direct-add. **Flagged, not
+resolved:** nothing stops a class having 8 direct-added students *and*
+`max_joiners` up to 8 more via Open Class approval — a theoretical
+16-person class. The two mechanisms were deliberately kept orthogonal
+rather than guessing at a combined cap; revisit if real usage ever
+approaches this.
+
+**Front-end connection:** `src/components/calendar/student-multi-select-field.tsx`
+(shared chip-toggle picker, reusing the visual pattern from
+`availability-edit-dialog.tsx`'s `locationIds` multi-select); the "Type"
+field moved to the top of `class-edit-dialog.tsx` (coach) and to directly
+below "Coach" in `student-class-edit-dialog.tsx` (student) — Private
+renders the existing single `Select`, Group/Match renders the multi-select
+instead. `src/lib/queries/students.ts` (`getAddableStudentsForStudent`),
+`src/lib/queries/classes.ts` (all four list/calendar query functions now
+batch-fetch each returned class's roster via `getParticipantsByClassId`,
+one extra `IN (...)` query per page load, not per event). A class's
+roster beyond the host renders as a small "+N" badge
+(`src/components/roster-badge.tsx`) on both the full and compact calendar
+event tiles, hidden entirely for Private classes.
+
 ## 12. Notifications
 
 A generic in-app notification table, deliberately **not** a normalized/

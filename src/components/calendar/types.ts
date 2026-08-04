@@ -50,6 +50,13 @@ export interface CalendarClassEvent {
     seriesId?: string | null
     isOpen: boolean
     maxJoiners: number | null
+    // Everyone besides the host (studentId/studentName above). Names are
+    // resolved client-side by whoever builds the event (see
+    // mapClassInstanceToEvent) — a parallel array to participantStudentIds,
+    // skipping any id that couldn't be resolved from the caller's own
+    // students list.
+    participantStudentIds: string[]
+    participantNames: string[]
   }
 }
 

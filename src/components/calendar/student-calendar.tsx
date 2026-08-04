@@ -36,6 +36,7 @@ import type {
   StudentClassFormSubmission,
 } from "@/components/calendar/types"
 import type { Coach, Location, Student } from "@/lib/mock-data"
+import type { AddableStudent } from "@/lib/queries/students"
 
 interface StudentCalendarProps {
   classEvents: CalendarEvent[]
@@ -44,6 +45,7 @@ interface StudentCalendarProps {
   coaches: Coach[]
   locations: Location[]
   studentProfile: Student
+  addableStudents: AddableStudent[]
 }
 
 export function StudentCalendar({
@@ -53,6 +55,7 @@ export function StudentCalendar({
   coaches,
   locations,
   studentProfile,
+  addableStudents,
 }: StudentCalendarProps) {
   const t = useTranslations("calendar")
   const locale = useLocale()
@@ -142,7 +145,7 @@ export function StudentCalendar({
       case "one-off": {
         const result = await createStudentClass(submission.input)
         if (!result.ok) throw new Error(result.error)
-        const mapped = mapClassInstanceToEvent(result.data, [studentProfile], locations, coaches)
+        const mapped = mapClassInstanceToEvent(result.data, [studentProfile, ...addableStudents], locations, coaches)
         if (mapped) setClassEvents((prev) => [...prev, { kind: "class" as const, ...mapped }])
         return
       }
@@ -150,7 +153,7 @@ export function StudentCalendar({
         const result = await createStudentClassSeries(submission.input)
         if (!result.ok) throw new Error(result.error)
         const mapped = result.data.flatMap((instance) => {
-          const event = mapClassInstanceToEvent(instance, [studentProfile], locations, coaches)
+          const event = mapClassInstanceToEvent(instance, [studentProfile, ...addableStudents], locations, coaches)
           return event ? [{ kind: "class" as const, ...event }] : []
         })
         setClassEvents((prev) => [...prev, ...mapped])
@@ -160,7 +163,7 @@ export function StudentCalendar({
         if (!selectedEvent) return
         const result = await updateStudentClassInstance(selectedEvent.id, submission.input)
         if (!result.ok) throw new Error(result.error)
-        const mapped = mapClassInstanceToEvent(result.data, [studentProfile], locations, coaches)
+        const mapped = mapClassInstanceToEvent(result.data, [studentProfile, ...addableStudents], locations, coaches)
         if (mapped) {
           setClassEvents((prev) => prev.map((e) => (e.id === mapped.id ? { kind: "class" as const, ...mapped } : e)))
         }
@@ -171,7 +174,7 @@ export function StudentCalendar({
         const result = await updateStudentClassSeries(submission.seriesId, submission.input)
         if (!result.ok) throw new Error(result.error)
         const mapped = result.data.flatMap((instance) => {
-          const event = mapClassInstanceToEvent(instance, [studentProfile], locations, coaches)
+          const event = mapClassInstanceToEvent(instance, [studentProfile, ...addableStudents], locations, coaches)
           return event ? [{ kind: "class" as const, ...event }] : []
         })
         setClassEvents((prev) => [
@@ -283,6 +286,7 @@ export function StudentCalendar({
         mode="edit"
         coaches={coaches}
         locations={locations}
+        addableStudents={addableStudents}
         onOpenChange={(open) => {
           if (!open) setSelectedEvent(null)
         }}
@@ -295,6 +299,7 @@ export function StudentCalendar({
         mode="create"
         coaches={coaches}
         locations={locations}
+        addableStudents={addableStudents}
         onOpenChange={(open) => {
           if (!open) setCreatingEvent(null)
         }}

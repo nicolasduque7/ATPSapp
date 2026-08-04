@@ -31,6 +31,11 @@ type Translator = Awaited<ReturnType<typeof getTranslations>>;
 // message this throws is built in the user's own language instead of being
 // hardcoded English — the fix for a real bug where server-thrown errors
 // always displayed in English regardless of the app's locale.
+// `studentName`, when passed, means this call is checking one of SEVERAL
+// selected students (a Group/Match roster) — the rejection message must
+// name exactly which one has the conflict, or the caller can't tell which
+// pick to change. Omitted for the single-student Private path, which keeps
+// today's unnamed message byte-for-byte unchanged.
 export async function assertNoStudentConflict(
   supabase: SupabaseServerClient,
   studentId: string,
@@ -39,6 +44,7 @@ export async function assertNoStudentConflict(
   t: Translator,
   locale: string,
   excludeClassId?: string,
+  studentName?: string,
 ): Promise<void> {
   const { data, error } = await supabase.rpc("check_student_conflict", {
     p_student_id: studentId,
@@ -58,7 +64,14 @@ export async function assertNoStudentConflict(
     const conflictStart = formatClubDate(parseDbTimestamp(conflict.start_time), "MMM d, h:mm a", dateFnsLocale);
     const conflictEnd = formatClubDate(parseDbTimestamp(conflict.end_time), "h:mm a", dateFnsLocale);
     throw new Error(
-      t("errorStudentConflict", { coachName: conflict.coach_name, start: conflictStart, end: conflictEnd }),
+      studentName
+        ? t("errorStudentConflictNamed", {
+            studentName,
+            coachName: conflict.coach_name,
+            start: conflictStart,
+            end: conflictEnd,
+          })
+        : t("errorStudentConflict", { coachName: conflict.coach_name, start: conflictStart, end: conflictEnd }),
     );
   }
 }
@@ -160,11 +173,15 @@ export interface SeriesInstanceRow {
   duration_minutes: number;
 }
 
+// `hostId` — the one student stored on `classes.student_id` itself. For a
+// Group/Match booking with more than one student, this is the first picked
+// student; everyone else is a `class_participants` row (see
+// buildParticipantRows below), never a second `classes` row.
 export function buildInstanceRows(
   occurrences: Date[],
   seriesId: string,
   coachId: string,
-  studentId: string,
+  hostId: string,
   input: { locationId: string; type: ClassType; startTime: string; durationMinutes: number },
 ): SeriesInstanceRow[] {
   return occurrences.map((day) => {
@@ -172,7 +189,7 @@ export function buildInstanceRows(
     const endTime = addMinutes(startTime, input.durationMinutes);
     return {
       coach_id: coachId,
-      student_id: studentId,
+      student_id: hostId,
       location_id: input.locationId,
       series_id: seriesId,
       class_type: input.type,
@@ -181,4 +198,90 @@ export function buildInstanceRows(
       duration_minutes: input.durationMinutes,
     };
   });
+}
+
+export interface ParticipantRow {
+  class_id: string;
+  student_id: string;
+  start_time: string;
+  end_time: string;
+}
+
+// Fans out one class_participants row per (occurrence x participant), given
+// the `classes` rows a bulk insert just returned. Correlates by start_time,
+// not array index/order -- Postgres bulk-insert RETURNING order isn't
+// guaranteed to match the input row order, but start_time is unique per
+// occurrence within one series-creation batch.
+export function buildParticipantRows(
+  insertedClasses: { id: string; start_time: string; end_time: string }[],
+  participantIds: string[],
+): ParticipantRow[] {
+  return insertedClasses.flatMap((c) =>
+    participantIds.map((studentId) => ({
+      class_id: c.id,
+      student_id: studentId,
+      start_time: c.start_time,
+      end_time: c.end_time,
+    })),
+  );
+}
+
+// Resolves display names for a roster of student ids, used only to name the
+// specific student in a conflict-rejection message (see
+// errorStudentConflictNamed) -- purely cosmetic, never used for
+// authorization. Only called when there's more than one student to check,
+// so the common single-student Private path does zero extra round trips.
+export async function getStudentDisplayNames(
+  supabase: SupabaseServerClient,
+  studentIds: string[],
+): Promise<Map<string, string>> {
+  const { data, error } = await supabase.rpc("get_student_display_names", { p_ids: studentIds });
+  if (error) {
+    console.error("get_student_display_names failed:", error);
+    return new Map();
+  }
+  return new Map((data ?? []).map((row: { id: string; name: string }) => [row.id, row.name]));
+}
+
+// Batched lookup of every class_participants row for a set of class ids,
+// grouped by class_id -- one query instead of N, shared by both action
+// files' update paths and by the query layer's list/calendar reads.
+export async function getParticipantsByClassId(
+  supabase: SupabaseServerClient,
+  classIds: string[],
+): Promise<Map<string, string[]>> {
+  const rosterByClassId = new Map<string, string[]>();
+  if (classIds.length === 0) return rosterByClassId;
+
+  const { data, error } = await supabase
+    .from("class_participants")
+    .select("class_id, student_id")
+    .in("class_id", classIds);
+
+  if (error) {
+    console.error("getParticipantsByClassId failed:", error);
+    return rosterByClassId;
+  }
+
+  for (const row of data ?? []) {
+    rosterByClassId.set(row.class_id, [...(rosterByClassId.get(row.class_id) ?? []), row.student_id]);
+  }
+  return rosterByClassId;
+}
+
+// Shared roster validation, called before any write on both the coach and
+// student side. `studentIds` is the FULL roster (host + participants).
+export function assertValidRoster(studentIds: string[], type: ClassType, t: Translator): void {
+  if (studentIds.length === 0) {
+    throw new Error(t("errorSelectStudents"));
+  }
+  if (new Set(studentIds).size !== studentIds.length) {
+    throw new Error(t("errorDuplicateStudent"));
+  }
+  if (studentIds.length > 8) {
+    throw new Error(t("errorTooManyStudents"));
+  }
+  if (type === "Private" && studentIds.length > 1) {
+    throw new Error(t("errorPrivateSingleStudent"));
+  }
 }

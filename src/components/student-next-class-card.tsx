@@ -22,12 +22,14 @@ import {
 } from "@/lib/actions/student-classes"
 import type { CalendarClassEvent, StudentClassFormSubmission } from "@/components/calendar/types"
 import type { ClassInstance, Coach, Location, Student } from "@/lib/mock-data"
+import type { AddableStudent } from "@/lib/queries/students"
 
 interface StudentNextClassCardProps {
   nextClass: ClassInstance | undefined
   studentProfile: Student
   coaches: Coach[]
   locations: Location[]
+  addableStudents: AddableStudent[]
 }
 
 function formatTime(date: Date): string {
@@ -53,6 +55,7 @@ export function StudentNextClassCard({
   studentProfile,
   coaches,
   locations,
+  addableStudents,
 }: StudentNextClassCardProps) {
   const t = useTranslations("dashboard")
   const appLocale = useLocale()
@@ -66,7 +69,7 @@ export function StudentNextClassCard({
 
   function handleOpenEdit() {
     if (!nextClass) return
-    const event = mapClassInstanceToEvent(nextClass, [studentProfile], locations, coaches)
+    const event = mapClassInstanceToEvent(nextClass, [studentProfile, ...addableStudents], locations, coaches)
     if (event) setEditingEvent(event)
   }
 
@@ -153,6 +156,7 @@ export function StudentNextClassCard({
         mode="edit"
         coaches={coaches}
         locations={locations}
+        addableStudents={addableStudents}
         onOpenChange={(open) => {
           if (!open) setEditingEvent(null)
         }}

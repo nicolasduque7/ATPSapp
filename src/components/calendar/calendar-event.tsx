@@ -8,6 +8,7 @@ import { LocationTag } from "@/components/location-tag"
 import { ClassTypeTag } from "@/components/class-type-tag"
 import { RecurringTag } from "@/components/recurring-tag"
 import { OpenClassTag } from "@/components/open-class-tag"
+import { RosterBadge } from "@/components/roster-badge"
 import { cn } from "@/lib/utils"
 import { formatClubTime } from "@/lib/dates"
 import type { CalendarEvent } from "@/components/calendar/types"
@@ -52,8 +53,18 @@ function useTileHeight() {
 function ClassEventTile({ event, currentCoachId }: CoachAwareEventProps) {
   const { ref, height } = useTileHeight()
   if (event.kind !== "class") return null
-  const { coachId, coachName, studentName, level, locationName, durationMinutes, type, seriesId, isOpen } =
-    event.resource
+  const {
+    coachId,
+    coachName,
+    studentName,
+    level,
+    locationName,
+    durationMinutes,
+    type,
+    seriesId,
+    isOpen,
+    participantNames,
+  } = event.resource
   const isOwn = coachId === currentCoachId
 
   const showLocation = height === null || height >= 46
@@ -71,6 +82,13 @@ function ClassEventTile({ event, currentCoachId }: CoachAwareEventProps) {
       <div className="flex shrink-0 flex-wrap items-center gap-1">
         <span className="truncate text-xs font-medium text-foreground">{studentName}</span>
         {showBadge && <LevelBadge level={level} className="px-1 py-0 text-[7px] leading-[1.4]" />}
+        {showBadge && type !== "Private" && participantNames.length > 0 && (
+          <RosterBadge
+            count={participantNames.length}
+            names={participantNames}
+            className="px-1 py-0 text-[7px] leading-[1.4]"
+          />
+        )}
         {showBadge && !isOwn && (
           <span
             className="inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-[7px] leading-[1.4] font-medium"
@@ -140,16 +158,22 @@ export function CalendarEventTileCompact({ event, currentCoachId }: CoachAwareEv
     )
   }
 
-  const { coachId, coachName, studentName, level, locationName, durationMinutes, isOpen } = event.resource
+  const { coachId, coachName, studentName, level, locationName, durationMinutes, type, isOpen, participantNames } =
+    event.resource
   const isOwn = coachId === currentCoachId
+  const rosterSuffix =
+    type !== "Private" && participantNames.length > 0 ? ` +${participantNames.length} (${participantNames.join(", ")})` : ""
   const tooltip = `${formatTime(event.start)} – ${formatTime(event.end)} · ${formatDuration(
     durationMinutes
-  )}\n${studentName} · ${level}\n${locationName}${isOwn ? "" : `\n${coachName}`}${isOpen ? "\nOpen Class" : ""}`
+  )}\n${studentName}${rosterSuffix} · ${level}\n${locationName}${isOwn ? "" : `\n${coachName}`}${isOpen ? "\nOpen Class" : ""}`
 
   return (
     <div title={tooltip} className="flex items-center gap-1 overflow-hidden text-xs">
       <span className="shrink-0 font-semibold text-foreground">{formatTime(event.start)}</span>
-      <span className="truncate text-foreground/80">{studentName}</span>
+      <span className="truncate text-foreground/80">
+        {studentName}
+        {type !== "Private" && participantNames.length > 0 && ` +${participantNames.length}`}
+      </span>
       {!isOwn && <span className="truncate text-[0.7rem] text-muted-foreground">· {coachName}</span>}
     </div>
   )

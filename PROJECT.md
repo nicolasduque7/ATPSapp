@@ -30,8 +30,13 @@ student, location), this week's upcoming classes, [+ your extra metrics].
 
 ### Calendar
 Views: Month, Week, 3-Day, Day. Each event shows start–end, duration, student
-name, student level, location tag. Actions: book a class (one-off OR recurring),
-edit a class, DELETE a class (hard delete — no cancellation status).
+name, student level, location tag. A Group/Match class with directly-added
+students beyond the host also shows a "+N" roster badge next to the student
+name (hover/tap for names). Actions: book a class (one-off OR recurring),
+edit a class, DELETE a class (hard delete — no cancellation status). The
+"Type" field (Private/Group/Match) is the first field in the booking form —
+picking Group or Match swaps the single student picker for a multi-select
+(see "Multi-student booking" below).
 
 ### Locations
 Create/edit/delete locations. Each location is a tag shown on calendar events.
@@ -58,11 +63,14 @@ next class to edit or delete it.
 The student-facing counterpart to the coach Calendar, at `/student/calendar`.
 Same Month/Week/3-Day/Day views and event-pill styling as the coach
 Calendar, showing only the student's own classes (always labeled with which
-coach, since a student's classes legitimately span multiple coaches). A
+coach, since a student's classes legitimately span multiple coaches),
+including the same "+N" roster badge for Group/Match classes. A
 "Coaches' working hours" toggle overlays coaches' declared availability,
 read-only — clicking a working-hours block does nothing, only class events
 open the edit dialog. The "+" button opens the same booking dialog as
-Student Home, with a coach-picker instead of a student-picker. A second
+Student Home, with a coach-picker instead of a student-picker; "Type" sits
+directly below the coach picker, and picking Group or Match reveals a
+classmate multi-select (see "Multi-student booking" below). A second
 toggle, "Other students' Open Classes," shows other students' classes that
 have been marked Open (see "Open Class" below) as a distinct, dashed pill;
 clicking one opens a read-only summary (student, coach, court, start/end,
@@ -101,12 +109,18 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
   days/weeks/months), weekdays (multi-select, Weekly only), day_of_month
   (1-30, Monthly only), start_time, duration, start_date, end_date (required)
 - Class (a single instance on the calendar — this is what the calendar reads):
-  id, coach_id, student_id, location_id, series_id (nullable — null = one-off),
-  start_time, end_time, duration, completed (bool), [notes?], is_open (bool,
-  default false), max_joiners (nullable, additional joiners only)
-- ClassParticipant (an approved Open Class joiner): id, class_id, student_id,
-  start_time/end_time (denormalized from the class, for double-booking
-  protection), joined_at
+  id, coach_id, student_id (the class's one "host" — for Group/Match, the
+  first student picked at booking time), location_id, series_id (nullable —
+  null = one-off), start_time, end_time, duration, completed (bool),
+  [notes?], is_open (bool, default false), max_joiners (nullable, additional
+  joiners only)
+- ClassParticipant (anyone on the roster besides the host): id, class_id,
+  student_id, start_time/end_time (denormalized from the class, for
+  double-booking protection), joined_at. Populated two ways, both writing
+  the same table: directly, when a coach/student hand-picks extra students
+  for a Group/Match class at booking time (immediate, no approval); or via
+  an approved Open Class join request (see below). A class can have both at
+  once — hand-picked students plus, separately, other approved joiners.
 - ClassJoinRequest (a student's request to join an Open Class): id, class_id,
   requesting_student_id, status (pending/approved/rejected), created_at,
   decided_at, decided_by
@@ -224,6 +238,21 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
   way double-booking already was — a booking outside those hours is
   rejected, using the identical logic the suggestion panel uses so the two
   can never disagree. See `BACKEND.md` section 15.
+- **Multi-student booking (Group/Match):** in both booking dialogs, "Type"
+  (Private/Group/Match) is now the first field a coach picks (and sits
+  directly below "Coach" on the student dialog) — picking Private keeps
+  today's single student picker, picking Group or Match swaps it for a
+  multi-select capped at 8 total students. This is a new, separate
+  mechanism from Open Class: the booking party hand-picks known students
+  directly, added immediately with no approval step — the coach's first
+  pick (or the student themselves, for a self-booked class) becomes the
+  class's one "host" record, everyone else becomes a roster entry. Open
+  Class stays fully independent and composable on top (a class can be both
+  hand-picked and separately left open for strangers to request to join).
+  Applies to one-off AND recurring series. If any picked student has a
+  conflict (double-booked, or outside the coach's working hours), the whole
+  save is rejected — nothing is booked — naming exactly which student and
+  why, in the user's own language. See `BACKEND.md` section 11a.
 
 ## Planned (not yet built)
 - Re-enable Google sign-in once the accidental-coach-account risk (see

@@ -33,6 +33,12 @@ export function mapOpenClassToEvent(
       seriesId: null,
       isOpen: true,
       maxJoiners: openClass.maxJoiners,
+      // A browsing student's read-only Open Class preview never shows the
+      // roster today — get_open_classes_for_student doesn't return it, and
+      // this event only ever opens the request-to-join popup, not the
+      // roster-bearing edit dialog.
+      participantStudentIds: [],
+      participantNames: [],
     },
   }
 }

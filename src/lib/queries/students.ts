@@ -1,6 +1,6 @@
 import { requireCoachId, requireStudent } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Student } from "@/lib/mock-data";
+import type { Student, StudentLevel } from "@/lib/mock-data";
 import { mapStudentRow, STUDENT_COLUMNS } from "@/lib/queries/student-row";
 
 export async function getStudents(): Promise<Student[]> {
@@ -39,4 +39,43 @@ export async function getCurrentStudentProfile(): Promise<Student> {
   }
 
   return mapStudentRow(data);
+}
+
+// Display-fields-only shape for the "add classmates" picker — a student
+// can't read a peer's full row via RLS, so this is intentionally narrower
+// than Student (no email/age/gender/coaching notes).
+export interface AddableStudent {
+  id: string;
+  name: string;
+  nickname?: string;
+  level: StudentLevel;
+}
+
+interface AddableStudentRow {
+  id: string;
+  name: string;
+  nickname: string | null;
+  level: StudentLevel;
+}
+
+// Classmates a student can pick for a Group/Match class, routed through a
+// SECURITY DEFINER RPC for the same reason getOpenClassesForStudent is —
+// students_select_own_linked only ever lets a student read their own row.
+export async function getAddableStudentsForStudent(): Promise<AddableStudent[]> {
+  await requireStudent();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("get_addable_students");
+
+  if (error) {
+    console.error("getAddableStudentsForStudent failed:", error);
+    throw new Error("Couldn't load classmates. Try again.");
+  }
+
+  return ((data as AddableStudentRow[]) ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    nickname: row.nickname ?? undefined,
+    level: row.level,
+  }));
 }

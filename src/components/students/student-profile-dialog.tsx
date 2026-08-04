@@ -214,6 +214,14 @@ function StudentProfileForm({
         seriesId: selectedClass.seriesId,
         isOpen: selectedClass.isOpen,
         maxJoiners: selectedClass.maxJoiners,
+        // This entry point only ever loads the one profile's own student
+        // into ClassEditDialog's students prop (see `students={[student]}`
+        // below), so other roster members' names can't be resolved here —
+        // ids are preserved (a Group/Match roster survives being edited
+        // from this dialog), just not rendered as chips from this entry
+        // point.
+        participantStudentIds: selectedClass.participantStudentIds,
+        participantNames: [],
       },
     }
   }, [selectedClass, locations, student.id, student.name, level])

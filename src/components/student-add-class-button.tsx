@@ -11,13 +11,15 @@ import { createDraftEvent } from "@/components/calendar/class-edit-dialog"
 import { createStudentClass, createStudentClassSeries } from "@/lib/actions/student-classes"
 import type { CalendarClassEvent, StudentClassFormSubmission } from "@/components/calendar/types"
 import type { Coach, Location } from "@/lib/mock-data"
+import type { AddableStudent } from "@/lib/queries/students"
 
 interface StudentAddClassButtonProps {
   coaches: Coach[]
   locations: Location[]
+  addableStudents: AddableStudent[]
 }
 
-export function StudentAddClassButton({ coaches, locations }: StudentAddClassButtonProps) {
+export function StudentAddClassButton({ coaches, locations, addableStudents }: StudentAddClassButtonProps) {
   const t = useTranslations("calendar")
   const router = useRouter()
   const [creatingEvent, setCreatingEvent] = useState<CalendarClassEvent | null>(null)
@@ -50,6 +52,7 @@ export function StudentAddClassButton({ coaches, locations }: StudentAddClassBut
         mode="create"
         coaches={coaches}
         locations={locations}
+        addableStudents={addableStudents}
         onOpenChange={(open) => {
           if (!open) setCreatingEvent(null)
         }}

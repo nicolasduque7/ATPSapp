@@ -34,7 +34,9 @@ import { getStudentClassSeriesMeta } from "@/lib/actions/student-classes"
 import { checkSeriesConflictsPreview, type SeriesConflictPreview } from "@/lib/actions/availability-suggestions"
 import { AvailableSlotsPanel } from "@/components/calendar/available-slots-panel"
 import type { ClassType, Coach, Location } from "@/lib/mock-data"
+import type { AddableStudent } from "@/lib/queries/students"
 import type { CalendarClassEvent, StudentClassFormSubmission } from "@/components/calendar/types"
+import { StudentMultiSelectField } from "@/components/calendar/student-multi-select-field"
 import {
   DAY_OF_MONTH_OPTIONS,
   DateOffsetField,
@@ -57,12 +59,16 @@ interface StudentClassEditDialogProps {
   mode: "create" | "edit"
   coaches: Coach[]
   locations: Location[]
+  addableStudents: AddableStudent[]
   onOpenChange: (open: boolean) => void
   onSave: (submission: StudentClassFormSubmission) => Promise<void>
   onDelete?: (eventId: string, options?: { deleteSeries?: boolean }) => Promise<void>
 }
 
 const CLASS_TYPES: ClassType[] = ["Private", "Group", "Match"]
+// Self is always the implicit 8th (or fewer) slot, so classmates cap one
+// below the coach dialog's MAX_STUDENTS.
+const MAX_PARTICIPANTS = 7
 
 const DATE_RANGE_BEFORE = 14
 const DATE_RANGE_AFTER = 90
@@ -80,6 +86,7 @@ export function StudentClassEditDialog({
   mode,
   coaches,
   locations,
+  addableStudents,
   onOpenChange,
   onSave,
   onDelete,
@@ -99,6 +106,7 @@ export function StudentClassEditDialog({
             mode={mode}
             coaches={coaches}
             locations={locations}
+            addableStudents={addableStudents}
             onOpenChange={onOpenChange}
             onSave={onSave}
             onDelete={onDelete}
@@ -114,6 +122,7 @@ interface StudentClassEditFormProps {
   mode: "create" | "edit"
   coaches: Coach[]
   locations: Location[]
+  addableStudents: AddableStudent[]
   onOpenChange: (open: boolean) => void
   onSave: (submission: StudentClassFormSubmission) => Promise<void>
   onDelete?: (eventId: string, options?: { deleteSeries?: boolean }) => Promise<void>
@@ -124,6 +133,7 @@ function StudentClassEditForm({
   mode,
   coaches,
   locations,
+  addableStudents,
   onOpenChange,
   onSave,
   onDelete,
@@ -144,6 +154,9 @@ function StudentClassEditForm({
   const [classType, setClassType] = useState<ClassType | null>(
     mode === "create" ? null : event.resource.type
   )
+  const [participantIds, setParticipantIds] = useState<string[]>(
+    mode === "create" ? [] : event.resource.participantStudentIds
+  )
   const [isOpen, setIsOpen] = useState(mode === "create" ? false : event.resource.isOpen)
   const [maxJoiners, setMaxJoiners] = useState(
     mode === "create" ? 1 : (event.resource.maxJoiners ?? 1)
@@ -160,6 +173,21 @@ function StudentClassEditForm({
     () => locations.filter((l) => !l.deactivatedAt || l.id === locationId),
     [locations, locationId]
   )
+
+  function handleClassTypeChange(next: ClassType) {
+    setClassType(next)
+    if (next === "Private") {
+      setParticipantIds([])
+    }
+  }
+
+  function toggleParticipant(id: string) {
+    setParticipantIds((prev) => {
+      if (prev.includes(id)) return prev.filter((sid) => sid !== id)
+      if (prev.length >= MAX_PARTICIPANTS) return prev
+      return [...prev, id]
+    })
+  }
 
   const seriesId = event.resource.seriesId ?? null
   const isSeriesInstance = mode === "edit" && !!seriesId
@@ -337,6 +365,11 @@ function StudentClassEditForm({
       }
     }
 
+    const participantStudentIds = classType === "Group" || classType === "Match" ? participantIds : []
+    const participantNames = participantStudentIds.map(
+      (id) => addableStudents.find((s) => s.id === id)?.name ?? ""
+    )
+
     setError(null)
     setSaving(true)
     try {
@@ -359,6 +392,8 @@ function StudentClassEditForm({
               startTime: recurringStartTime,
               durationMinutes,
               endDate: formatDateOnly(addDays(today, recurringUntilOffset)),
+              participantStudentIds,
+              participantNames,
             },
           })
         } else if (seriesId) {
@@ -375,6 +410,8 @@ function StudentClassEditForm({
               startTime: recurringStartTime,
               durationMinutes,
               endDate: formatDateOnly(addDays(today, recurringUntilOffset)),
+              participantStudentIds,
+              participantNames,
             },
           })
         }
@@ -391,6 +428,8 @@ function StudentClassEditForm({
           durationMinutes: Math.round((end.getTime() - start.getTime()) / 60_000),
           isOpen,
           maxJoiners: isOpen ? maxJoiners : null,
+          participantStudentIds,
+          participantNames,
         }
         await onSave(mode === "create" ? { kind: "one-off", input } : { kind: "instance-edit", input })
       }
@@ -442,6 +481,44 @@ function StudentClassEditForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">{t("type")}</span>
+          <div role="radiogroup" aria-label={t("type")} className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1">
+            {CLASS_TYPES.map((classTypeOption) => (
+              <button
+                key={classTypeOption}
+                type="button"
+                role="radio"
+                aria-checked={classType === classTypeOption}
+                onClick={() => handleClassTypeChange(classTypeOption)}
+                className={cn(
+                  "cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none",
+                  classType === classTypeOption
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {te(classTypeOption)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {(classType === "Group" || classType === "Match") && (
+          <div className="flex flex-col gap-1.5">
+            <StudentMultiSelectField
+              id={`${formId}-classmates`}
+              label={t("addClassmates")}
+              options={addableStudents}
+              selectedIds={participantIds}
+              onToggle={toggleParticipant}
+              maxCount={MAX_PARTICIPANTS}
+              emptyMessage={t("noAddableStudents")}
+            />
+            <span className="text-xs text-muted-foreground">{t("addClassmatesCaption")}</span>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">{t("location")}</span>
           <div role="radiogroup" aria-label={t("location")} className="flex flex-wrap gap-2">
             {visibleLocations.map((location) => {
@@ -466,29 +543,6 @@ function StudentClassEditForm({
                 </button>
               )
             })}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">{t("type")}</span>
-          <div role="radiogroup" aria-label={t("type")} className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1">
-            {CLASS_TYPES.map((classTypeOption) => (
-              <button
-                key={classTypeOption}
-                type="button"
-                role="radio"
-                aria-checked={classType === classTypeOption}
-                onClick={() => setClassType(classTypeOption)}
-                className={cn(
-                  "cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none",
-                  classType === classTypeOption
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {te(classTypeOption)}
-              </button>
-            ))}
           </div>
         </div>
 

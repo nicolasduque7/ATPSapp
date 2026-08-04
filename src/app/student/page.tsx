@@ -4,7 +4,7 @@ import { requireStudent } from "@/lib/auth";
 import { getStudentClasses } from "@/lib/queries/classes";
 import { getLocationsForStudent } from "@/lib/queries/locations";
 import { getCoachesForStudent } from "@/lib/queries/coaches";
-import { getCurrentStudentProfile } from "@/lib/queries/students";
+import { getAddableStudentsForStudent, getCurrentStudentProfile } from "@/lib/queries/students";
 import {
   getBusiestDayThisWeek,
   getClassesCoachedThisWeek,
@@ -23,12 +23,13 @@ import { StudentNextClassCard } from "@/components/student-next-class-card";
 import { CountUpNumber } from "@/components/count-up-number";
 
 export default async function StudentHomePage(): Promise<React.JSX.Element> {
-  const [student, profile, classes, coaches, locations, t] = await Promise.all([
+  const [student, profile, classes, coaches, locations, addableStudents, t] = await Promise.all([
     requireStudent(),
     getCurrentStudentProfile(),
     getStudentClasses(),
     getCoachesForStudent(),
     getLocationsForStudent(),
+    getAddableStudentsForStudent(),
     getTranslations("studentHome"),
   ]);
 
@@ -51,7 +52,7 @@ export default async function StudentHomePage(): Promise<React.JSX.Element> {
           <h1 className="font-heading text-2xl font-bold text-foreground">{t("greeting", { name: firstName })}</h1>
           <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <StudentAddClassButton coaches={coaches} locations={locations} />
+        <StudentAddClassButton coaches={coaches} locations={locations} addableStudents={addableStudents} />
       </div>
 
       <StudentNextClassCard
@@ -59,6 +60,7 @@ export default async function StudentHomePage(): Promise<React.JSX.Element> {
         studentProfile={profile}
         coaches={coaches}
         locations={locations}
+        addableStudents={addableStudents}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

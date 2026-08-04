@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDbTimestamp, parseDbTimestamp } from "@/lib/dates";
 import type { ClassInstance, ClassType, StudentLevel } from "@/lib/mock-data";
 import { mapClassRow, CLASS_COLUMNS } from "@/lib/queries/class-row";
+import { getParticipantsByClassId } from "@/lib/actions/class-shared";
 
 export async function getUpcomingClasses(): Promise<ClassInstance[]> {
   const coachId = await requireCoachId();
@@ -20,8 +21,12 @@ export async function getUpcomingClasses(): Promise<ClassInstance[]> {
     throw new Error("Couldn't load classes. Try again.");
   }
 
+  const rosterByClassId = await getParticipantsByClassId(
+    supabase,
+    (data ?? []).map((row) => row.id),
+  );
   // Every row matched start_time >= now, so none of these can be completed.
-  return (data ?? []).map((row) => mapClassRow(row, false));
+  return (data ?? []).map((row) => mapClassRow(row, false, rosterByClassId.get(row.id) ?? []));
 }
 
 // Own classes only, filtered explicitly rather than relying solely on RLS —
@@ -43,8 +48,14 @@ export async function getAllClasses(): Promise<ClassInstance[]> {
     throw new Error("Couldn't load classes. Try again.");
   }
 
+  const rosterByClassId = await getParticipantsByClassId(
+    supabase,
+    (data ?? []).map((row) => row.id),
+  );
   const now = new Date();
-  return (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now));
+  return (data ?? []).map((row) =>
+    mapClassRow(row, parseDbTimestamp(row.end_time) < now, rosterByClassId.get(row.id) ?? []),
+  );
 }
 
 // A student's own classes, across every coach — explicitly filtered rather
@@ -65,8 +76,14 @@ export async function getStudentClasses(): Promise<ClassInstance[]> {
     throw new Error("Couldn't load classes. Try again.");
   }
 
+  const rosterByClassId = await getParticipantsByClassId(
+    supabase,
+    (data ?? []).map((row) => row.id),
+  );
   const now = new Date();
-  return (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now));
+  return (data ?? []).map((row) =>
+    mapClassRow(row, parseDbTimestamp(row.end_time) < now, rosterByClassId.get(row.id) ?? []),
+  );
 }
 
 export interface OpenClassForStudent {
@@ -151,6 +168,12 @@ export async function getAllClassesAllCoaches(): Promise<ClassInstance[]> {
     throw new Error("Couldn't load classes. Try again.");
   }
 
+  const rosterByClassId = await getParticipantsByClassId(
+    supabase,
+    (data ?? []).map((row) => row.id),
+  );
   const now = new Date();
-  return (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now));
+  return (data ?? []).map((row) =>
+    mapClassRow(row, parseDbTimestamp(row.end_time) < now, rosterByClassId.get(row.id) ?? []),
+  );
 }

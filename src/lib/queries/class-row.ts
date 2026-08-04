@@ -19,7 +19,7 @@ export interface ClassRow {
   max_joiners: number | null;
 }
 
-export function mapClassRow(row: ClassRow, completed = false): ClassInstance {
+export function mapClassRow(row: ClassRow, completed = false, participantStudentIds: string[] = []): ClassInstance {
   return {
     id: row.id,
     coachId: row.coach_id,
@@ -34,5 +34,6 @@ export function mapClassRow(row: ClassRow, completed = false): ClassInstance {
     notes: row.notes ?? undefined,
     isOpen: row.is_open,
     maxJoiners: row.max_joiners,
+    participantStudentIds,
   };
 }

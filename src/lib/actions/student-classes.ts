@@ -22,8 +22,11 @@ import { mapClassRow, CLASS_COLUMNS } from "@/lib/queries/class-row";
 import {
   assertNoCoachConflict,
   assertNoStudentConflict,
+  assertValidRoster,
   assertWithinWorkingHours,
   buildInstanceRows,
+  buildParticipantRows,
+  getParticipantsByClassId,
   isExclusionViolation,
 } from "@/lib/actions/class-shared";
 import type { ClassSeriesMeta } from "@/lib/actions/classes";
@@ -43,6 +46,53 @@ async function assertValidCoach(supabase: SupabaseServerClient, coachId: string,
   }
 }
 
+// The booking student (host) can never appear in their own participant
+// list. Unlike the coach side, RLS blocks a student from reading a
+// classmate's row directly (students_select_own_linked is self-only), so
+// there's no server-side name lookup available here — the caller must
+// supply participantNames, parallel to participantIds, sourced from the
+// get_addable_students() result the picker itself renders from.
+function assertValidRosterForStudent(
+  studentId: string,
+  participantIds: string[],
+  type: ClassType,
+  t: Translator,
+): void {
+  if (participantIds.includes(studentId)) {
+    throw new Error(t("errorDuplicateStudent"));
+  }
+  assertValidRoster([studentId, ...participantIds], type, t);
+}
+
+// The host (self) always gets today's unnamed conflict message, unchanged —
+// only classmates get the named variant, using the client-supplied display
+// name at the matching index.
+async function assertNoConflictForStudentRoster(
+  supabase: SupabaseServerClient,
+  hostId: string,
+  participantIds: string[],
+  participantNames: string[],
+  startTime: Date,
+  endTime: Date,
+  t: Translator,
+  locale: string,
+  excludeClassId?: string,
+): Promise<void> {
+  await assertNoStudentConflict(supabase, hostId, startTime, endTime, t, locale, excludeClassId);
+  for (let i = 0; i < participantIds.length; i++) {
+    await assertNoStudentConflict(
+      supabase,
+      participantIds[i],
+      startTime,
+      endTime,
+      t,
+      locale,
+      excludeClassId,
+      participantNames[i],
+    );
+  }
+}
+
 function revalidateAll(): void {
   revalidatePath("/student");
   revalidatePath("/student/calendar");
@@ -51,6 +101,10 @@ function revalidateAll(): void {
   revalidatePath("/calendar");
 }
 
+// `participantStudentIds`/`participantNames` are classmates picked
+// alongside the booking student for a Group/Match class — parallel arrays,
+// empty for Private. The booking student themselves is always the host
+// (server-derived from requireStudent(), never client-trusted).
 export interface StudentClassInstanceInput {
   coachId: string;
   locationId: string;
@@ -60,6 +114,8 @@ export interface StudentClassInstanceInput {
   durationMinutes: number;
   isOpen: boolean;
   maxJoiners: number | null;
+  participantStudentIds: string[];
+  participantNames: string[];
 }
 
 export interface StudentClassSeriesInput {
@@ -74,6 +130,8 @@ export interface StudentClassSeriesInput {
   startTime: string; // "HH:mm"
   durationMinutes: number;
   endDate: string; // "YYYY-MM-DD", club-local
+  participantStudentIds: string[];
+  participantNames: string[];
 }
 
 export interface StudentClassSeriesUpdateInput {
@@ -86,6 +144,8 @@ export interface StudentClassSeriesUpdateInput {
   startTime: string; // "HH:mm"
   durationMinutes: number;
   endDate: string; // "YYYY-MM-DD", club-local
+  participantStudentIds: string[];
+  participantNames: string[];
 }
 
 export async function createStudentClass(
@@ -96,9 +156,19 @@ export async function createStudentClass(
     const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
 
+    assertValidRosterForStudent(studentId, input.participantStudentIds, input.type, t);
     await assertValidCoach(supabase, input.coachId, t);
     await assertWithinWorkingHours(supabase, input.coachId, input.locationId, input.startTime, input.endTime, t);
-    await assertNoStudentConflict(supabase, studentId, input.startTime, input.endTime, t, locale);
+    await assertNoConflictForStudentRoster(
+      supabase,
+      studentId,
+      input.participantStudentIds,
+      input.participantNames,
+      input.startTime,
+      input.endTime,
+      t,
+      locale,
+    );
     await assertNoCoachConflict(supabase, input.coachId, input.startTime, input.endTime, t, locale);
 
     const { data, error } = await supabase
@@ -122,8 +192,23 @@ export async function createStudentClass(
       throw new Error(isExclusionViolation(error) ? t("errorTimeJustTaken") : t("errorBookClass"));
     }
 
+    if (input.participantStudentIds.length > 0) {
+      const rows = input.participantStudentIds.map((participantId) => ({
+        class_id: data.id,
+        student_id: participantId,
+        start_time: formatDbTimestamp(input.startTime),
+        end_time: formatDbTimestamp(input.endTime),
+      }));
+      const { error: participantError } = await supabase.from("class_participants").insert(rows);
+      if (participantError) {
+        console.error("createStudentClass participants failed:", participantError);
+        await supabase.from("classes").delete().eq("id", data.id);
+        throw new Error(isExclusionViolation(participantError) ? t("errorTimeJustTaken") : t("errorBookClass"));
+      }
+    }
+
     revalidateAll();
-    return { ok: true, data: mapClassRow(data) };
+    return { ok: true, data: mapClassRow(data, false, input.participantStudentIds) };
   } catch (e) {
     unstable_rethrow(e);
     const t = await getTranslations("classForm");
@@ -139,6 +224,7 @@ export async function createStudentClassSeries(
     const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
 
+    assertValidRosterForStudent(studentId, input.participantStudentIds, input.type, t);
     await assertValidCoach(supabase, input.coachId, t);
 
     if (input.endDate < input.startDate) {
@@ -166,7 +252,16 @@ export async function createStudentClassSeries(
       const startTime = combineClubDateAndTime(day, input.startTime);
       const endTime = addMinutes(startTime, input.durationMinutes);
       await assertWithinWorkingHours(supabase, input.coachId, input.locationId, startTime, endTime, t);
-      await assertNoStudentConflict(supabase, studentId, startTime, endTime, t, locale);
+      await assertNoConflictForStudentRoster(
+        supabase,
+        studentId,
+        input.participantStudentIds,
+        input.participantNames,
+        startTime,
+        endTime,
+        t,
+        locale,
+      );
       await assertNoCoachConflict(supabase, input.coachId, startTime, endTime, t, locale);
     }
 
@@ -203,8 +298,20 @@ export async function createStudentClassSeries(
       throw new Error(isExclusionViolation(error) ? t("errorTimeJustTakenSeries") : t("errorBookSeries"));
     }
 
+    if (input.participantStudentIds.length > 0) {
+      const participantRows = buildParticipantRows(data, input.participantStudentIds);
+      const { error: participantError } = await supabase.from("class_participants").insert(participantRows);
+      if (participantError) {
+        console.error("createStudentClassSeries participants failed:", participantError);
+        await supabase.from("class_series").delete().eq("id", series.id);
+        throw new Error(
+          isExclusionViolation(participantError) ? t("errorTimeJustTakenSeries") : t("errorBookSeries"),
+        );
+      }
+    }
+
     revalidateAll();
-    return { ok: true, data: (data ?? []).map((row) => mapClassRow(row)) };
+    return { ok: true, data: (data ?? []).map((row) => mapClassRow(row, false, input.participantStudentIds)) };
   } catch (e) {
     unstable_rethrow(e);
     const t = await getTranslations("classForm");
@@ -226,6 +333,7 @@ export async function updateStudentClassSeries(
     const supabase = await createClient();
     const now = new Date();
 
+    assertValidRosterForStudent(studentId, input.participantStudentIds, input.type, t);
     await assertValidCoach(supabase, input.coachId, t);
 
     const { data: updatedSeries, error: seriesError } = await supabase
@@ -278,15 +386,39 @@ export async function updateStudentClassSeries(
         const startTime = combineClubDateAndTime(day, input.startTime);
         const endTime = addMinutes(startTime, input.durationMinutes);
         await assertWithinWorkingHours(supabase, input.coachId, input.locationId, startTime, endTime, t);
-        await assertNoStudentConflict(supabase, studentId, startTime, endTime, t, locale);
+        await assertNoConflictForStudentRoster(
+          supabase,
+          studentId,
+          input.participantStudentIds,
+          input.participantNames,
+          startTime,
+          endTime,
+          t,
+          locale,
+        );
         await assertNoCoachConflict(supabase, input.coachId, startTime, endTime, t, locale);
       }
 
       const rows = buildInstanceRows(occurrences, seriesId, input.coachId, studentId, input);
-      const { error: insertError } = await supabase.from("classes").insert(rows);
+      const { data: insertedRows, error: insertError } = await supabase.from("classes").insert(rows).select(CLASS_COLUMNS);
       if (insertError) {
         console.error("updateStudentClassSeries (inserting future instances) failed:", insertError);
         throw new Error(isExclusionViolation(insertError) ? t("errorTimeJustTakenSeries") : t("errorSaveSeries"));
+      }
+
+      if (input.participantStudentIds.length > 0) {
+        const participantRows = buildParticipantRows(insertedRows ?? [], input.participantStudentIds);
+        const { error: participantError } = await supabase.from("class_participants").insert(participantRows);
+        if (participantError) {
+          console.error("updateStudentClassSeries participants failed:", participantError);
+          await supabase
+            .from("classes")
+            .delete()
+            .in("id", (insertedRows ?? []).map((row) => row.id));
+          throw new Error(
+            isExclusionViolation(participantError) ? t("errorTimeJustTakenSeries") : t("errorSaveSeries"),
+          );
+        }
       }
     }
 
@@ -302,8 +434,18 @@ export async function updateStudentClassSeries(
       throw new Error(t("errorRefreshSeries"));
     }
 
+    const rosterByClassId = await getParticipantsByClassId(
+      supabase,
+      (data ?? []).map((row) => row.id),
+    );
+
     revalidateAll();
-    return { ok: true, data: (data ?? []).map((row) => mapClassRow(row, parseDbTimestamp(row.end_time) < now)) };
+    return {
+      ok: true,
+      data: (data ?? []).map((row) =>
+        mapClassRow(row, parseDbTimestamp(row.end_time) < now, rosterByClassId.get(row.id) ?? []),
+      ),
+    };
   } catch (e) {
     unstable_rethrow(e);
     const t = await getTranslations("classForm");
@@ -351,9 +493,27 @@ export async function updateStudentClassInstance(
     const [t, locale] = await Promise.all([getTranslations("classForm"), getLocale()]);
     const supabase = await createClient();
 
+    assertValidRosterForStudent(studentId, input.participantStudentIds, input.type, t);
+
+    const { data: existingParticipants } = await supabase
+      .from("class_participants")
+      .select("student_id")
+      .eq("class_id", id);
+    const existingParticipantIds = (existingParticipants ?? []).map((row) => row.student_id);
+
     await assertValidCoach(supabase, input.coachId, t);
     await assertWithinWorkingHours(supabase, input.coachId, input.locationId, input.startTime, input.endTime, t);
-    await assertNoStudentConflict(supabase, studentId, input.startTime, input.endTime, t, locale, id);
+    await assertNoConflictForStudentRoster(
+      supabase,
+      studentId,
+      input.participantStudentIds,
+      input.participantNames,
+      input.startTime,
+      input.endTime,
+      t,
+      locale,
+      id,
+    );
     await assertNoCoachConflict(supabase, input.coachId, input.startTime, input.endTime, t, locale, id);
 
     const { data, error } = await supabase
@@ -378,8 +538,36 @@ export async function updateStudentClassInstance(
       throw new Error(isExclusionViolation(error) ? t("errorTimeJustTaken") : t("errorSaveClass"));
     }
 
+    const toRemove = existingParticipantIds.filter((sid) => !input.participantStudentIds.includes(sid));
+    const toAdd = input.participantStudentIds.filter((sid) => !existingParticipantIds.includes(sid));
+
+    if (toRemove.length > 0) {
+      const { error: removeError } = await supabase
+        .from("class_participants")
+        .delete()
+        .eq("class_id", id)
+        .in("student_id", toRemove);
+      if (removeError) {
+        console.error("updateStudentClassInstance (removing participants) failed:", removeError);
+        throw new Error(t("errorSaveClass"));
+      }
+    }
+    if (toAdd.length > 0) {
+      const rows = toAdd.map((participantId) => ({
+        class_id: id,
+        student_id: participantId,
+        start_time: formatDbTimestamp(input.startTime),
+        end_time: formatDbTimestamp(input.endTime),
+      }));
+      const { error: addError } = await supabase.from("class_participants").insert(rows);
+      if (addError) {
+        console.error("updateStudentClassInstance (adding participants) failed:", addError);
+        throw new Error(isExclusionViolation(addError) ? t("errorTimeJustTaken") : t("errorSaveClass"));
+      }
+    }
+
     revalidateAll();
-    return { ok: true, data: mapClassRow(data) };
+    return { ok: true, data: mapClassRow(data, false, input.participantStudentIds) };
   } catch (e) {
     unstable_rethrow(e);
     const t = await getTranslations("classForm");
