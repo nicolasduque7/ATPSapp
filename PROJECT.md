@@ -213,6 +213,17 @@ single instance. (Also offer "delete this whole series" for recurring classes.)
   more subtly, class/working-hours times shown elsewhere) could be off by
   a day or an hour for any viewer not in the same timezone as the Vercel
   server (UTC).
+- Coach working hours moved from purely descriptive to enforced: once a
+  coach + location are picked in the booking form (student or coach side,
+  create or edit, one-off or recurring), a suggestion panel shows that
+  coach's actual open slots for the selected day (working hours minus
+  existing bookings), with a day-bar to browse ahead when the selected day
+  has nothing open, plus a dry-run preview for recurring series showing how
+  many generated sessions would land free. At submit time, the exact chosen
+  time is now validated against the coach's declared working hours the same
+  way double-booking already was — a booking outside those hours is
+  rejected, using the identical logic the suggestion panel uses so the two
+  can never disagree. See `BACKEND.md` section 15.
 
 ## Planned (not yet built)
 - Re-enable Google sign-in once the accidental-coach-account risk (see
